@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Add torrent</title>
+  <link rel="stylesheet" href="../mockup.css">
+</head>
+<body>
+  <div class="app" aria-hidden="true">
+    <aside class="sidebar">
+      <div class="brand">
+        <span class="mark" aria-hidden="true">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+            <path d="M8 3v7M4.8 7.8 8 11.2 11.2 7.8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </span>
+        Transmission
+      </div>
+      <nav class="dest">
+        <button class="nav-btn active" type="button">Torrents</button>
+        <button class="nav-btn" type="button">Activity</button>
+        <button class="nav-btn" type="button">Settings</button>
+      </nav>
+      <div class="sidebar-scroll">
+        <div class="group-label">Library</div>
+        <button class="filter-btn active" type="button"><span>All</span><span class="count">5</span></button>
+        <button class="filter-btn" type="button"><span>Downloading</span><span class="count">3</span></button>
+        <button class="filter-btn" type="button"><span>Seeding</span><span class="count">1</span></button>
+        <button class="filter-btn" type="button"><span>Stopped</span><span class="count">1</span></button>
+      </div>
+      <div class="speeds">
+        <div><span>Down</span><strong>2.3 MB/s</strong></div>
+        <div><span>Up</span><strong>687 kB/s</strong></div>
+      </div>
+    </aside>
+    <main class="main">
+      <div class="toolbar">
+        <input class="search" type="search" placeholder="Filter by name" aria-label="Filter by name">
+        <button class="primary" type="button">Add</button>
+      </div>
+    </main>
+  </div>
+  <div class="scrim">
+    <form class="dialog">
+      <h1>Add torrent</h1>
+      <p>Add a file, a magnet link, or the URL of a torrent file.</p>
+      <div class="drop">Drop a .torrent file, or browse</div>
+      <div class="field">
+        <label for="url">Magnet link or URL</label>
+        <input id="url" type="text" value="magnet:?xt=urn:btih:a4c8e1b09f673d2a5c8e91b047d6f3a29c1e5b78">
+      </div>
+      <div class="field">
+        <label for="dir">Download to</label>
+        <input id="dir" type="text" value="/data/downloads">
+        <div class="free">412 GB free</div>
+      </div>
+      <label class="check"><input type="checkbox" checked> Start immediately</label>
+      <div class="field">
+        <label for="labels">Labels</label>
+        <input id="labels" type="text" value="linux">
+      </div>
+      <div class="dialog-actions">
+        <button class="ghost" type="button">Cancel</button>
+        <button class="primary" type="button">Add</button>
+      </div>
+    </form>
+  </div>
+</body>
+</html>

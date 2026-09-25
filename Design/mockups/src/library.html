@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Library</title>
+  <link rel="stylesheet" href="../mockup.css">
+</head>
+<body>
+  <div class="app">
+    <aside class="sidebar">
+      <div class="brand">
+        <span class="mark" aria-hidden="true">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+            <path d="M8 3v7M4.8 7.8 8 11.2 11.2 7.8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </span>
+        Transmission
+      </div>
+      <nav class="dest" aria-label="Sections">
+        <button class="nav-btn active" type="button">Torrents</button>
+        <button class="nav-btn" type="button">Activity</button>
+        <button class="nav-btn" type="button">Settings</button>
+      </nav>
+      <div class="sidebar-scroll">
+        <div class="group-label">Library</div>
+        <button class="filter-btn active" type="button"><span>All</span><span class="count">5</span></button>
+        <button class="filter-btn" type="button"><span>Downloading</span><span class="count">3</span></button>
+        <button class="filter-btn" type="button"><span>Seeding</span><span class="count">1</span></button>
+        <button class="filter-btn" type="button"><span>Stopped</span><span class="count">1</span></button>
+        <button class="filter-btn" type="button"><span>Checking</span><span class="count">0</span></button>
+        <button class="filter-btn" type="button"><span>Error</span><span class="count">1</span></button>
+        <div class="group-label">Progress</div>
+        <button class="filter-btn" type="button"><span>Active</span><span class="count">3</span></button>
+        <button class="filter-btn" type="button"><span>Finished</span><span class="count">2</span></button>
+        <div class="group-label">Labels</div>
+        <button class="filter-btn" type="button"><span>linux</span><span class="count">2</span></button>
+        <button class="filter-btn" type="button"><span>demo</span><span class="count">1</span></button>
+      </div>
+      <div class="speeds">
+        <div><span>Down</span><strong>2.3 MB/s</strong></div>
+        <div><span>Up</span><strong>687 kB/s</strong></div>
+      </div>
+    </aside>
+    <main class="main">
+      <div class="toolbar">
+        <input class="search" type="search" placeholder="Filter by name" aria-label="Filter by name">
+        <button class="ghost" type="button">Lock</button>
+        <button class="primary" type="button">Add</button>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Progress</th>
+              <th class="num">Size</th>
+              <th class="num">Down</th>
+              <th class="num">Up</th>
+              <th class="num">ETA</th>
+              <th class="num">Ratio</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="name-cell"><div class="name">Ubuntu 24.04.1 desktop amd64</div><div class="sub">Downloading</div></td>
+              <td><span class="bar" style="--p:62%"><span style="width:62%"></span></span><span class="pct">62%</span></td>
+              <td class="num">5.8 GB</td>
+              <td class="num">2.1 MB/s</td>
+              <td class="num">41 kB/s</td>
+              <td class="num">18 min</td>
+              <td class="num">0.08</td>
+            </tr>
+            <tr>
+              <td class="name-cell"><div class="name">Blender 4.2 demo reel</div><div class="sub">Seeding</div></td>
+              <td><span class="bar"><span style="width:100%"></span></span><span class="pct">100%</span></td>
+              <td class="num">186 MB</td>
+              <td class="num">—</td>
+              <td class="num">640 kB/s</td>
+              <td class="num">—</td>
+              <td class="num">2.40</td>
+            </tr>
+            <tr>
+              <td class="name-cell"><div class="name">Gutenberg science shelf</div><div class="sub">Downloading</div></td>
+              <td><span class="bar"><span style="width:14%"></span></span><span class="pct">14%</span></td>
+              <td class="num">240 MB</td>
+              <td class="num">180 kB/s</td>
+              <td class="num">6 kB/s</td>
+              <td class="num">1 h 12 min</td>
+              <td class="num">0.02</td>
+            </tr>
+            <tr>
+              <td class="name-cell"><div class="name">Debian 12 netinst amd64</div><div class="sub">Stopped</div></td>
+              <td><span class="bar muted"><span style="width:100%"></span></span><span class="pct">100%</span></td>
+              <td class="num">629 MB</td>
+              <td class="num">—</td>
+              <td class="num">—</td>
+              <td class="num">—</td>
+              <td class="num">1.05</td>
+            </tr>
+            <tr>
+              <td class="name-cell"><div class="name">Fedora 40 workstation</div><div class="sub error">Connection failed</div></td>
+              <td><span class="bar strong"><span style="width:8%"></span></span><span class="pct">8%</span></td>
+              <td class="num">2.1 GB</td>
+              <td class="num">—</td>
+              <td class="num">—</td>
+              <td class="num">—</td>
+              <td class="num">0.00</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </main>
+  </div>
+</body>
+</html>

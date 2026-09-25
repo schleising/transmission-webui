@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Appearance settings</title>
+  <link rel="stylesheet" href="../mockup.css">
+</head>
+<body>
+  <div class="app">
+    <aside class="sidebar">
+      <div class="brand">
+        <span class="mark" aria-hidden="true">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+            <path d="M8 3v7M4.8 7.8 8 11.2 11.2 7.8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </span>
+        Transmission
+      </div>
+      <nav class="dest" aria-label="Sections">
+        <button class="nav-btn" type="button">Torrents</button>
+        <button class="nav-btn" type="button">Activity</button>
+        <button class="nav-btn active" type="button">Settings</button>
+      </nav>
+      <div class="sidebar-scroll">
+        <div class="group-label">Settings</div>
+        <button class="filter-btn active" type="button">Appearance</button>
+        <button class="filter-btn" type="button">Speed</button>
+        <button class="filter-btn" type="button">Downloads</button>
+        <button class="filter-btn" type="button">Seeding</button>
+        <button class="filter-btn" type="button">Connections</button>
+        <button class="filter-btn" type="button">Queue</button>
+        <button class="filter-btn" type="button">Blocklist</button>
+        <button class="filter-btn" type="button">Groups</button>
+      </div>
+      <div class="speeds">
+        <div><span>Down</span><strong>2.3 MB/s</strong></div>
+        <div><span>Up</span><strong>687 kB/s</strong></div>
+      </div>
+    </aside>
+    <main class="main">
+      <div class="content">
+        <h1>Appearance</h1>
+        <p class="lead">The interface is painted from one colour. Choose that colour here. Backgrounds, text, buttons, and progress all come from its hue.</p>
+        <div class="field">
+          <label for="hex">Base colour</label>
+          <div class="color-row">
+            <span class="swatch" aria-hidden="true"></span>
+            <input class="hex" id="hex" value="#14756F">
+          </div>
+        </div>
+        <div class="field">
+          <label>Presets</label>
+          <div class="presets" role="radiogroup" aria-label="Preset colours">
+            <button type="button" aria-checked="true" aria-label="Teal" style="background:#14756F"></button>
+            <button type="button" aria-checked="false" aria-label="Blue" style="background:#1F4E8C"></button>
+            <button type="button" aria-checked="false" aria-label="Indigo" style="background:#3D3A8C"></button>
+            <button type="button" aria-checked="false" aria-label="Violet" style="background:#6B3A86"></button>
+            <button type="button" aria-checked="false" aria-label="Crimson" style="background:#8C2F3A"></button>
+            <button type="button" aria-checked="false" aria-label="Amber" style="background:#8A5A12"></button>
+            <button type="button" aria-checked="false" aria-label="Green" style="background:#1F6B3A"></button>
+          </div>
+        </div>
+        <div class="field">
+          <label>Mode</label>
+          <div class="segmented" role="radiogroup" aria-label="Mode">
+            <button class="active" type="button">Light</button>
+            <button type="button">Dark</button>
+            <button type="button">System</button>
+          </div>
+        </div>
+        <div class="field">
+          <label>Derived from this hue</label>
+          <div class="tokens">
+            <div class="token"><i style="background:var(--bg)"></i><b>Background</b></div>
+            <div class="token"><i style="background:var(--surface)"></i><b>Surface</b></div>
+            <div class="token"><i style="background:var(--text)"></i><b>Text</b></div>
+            <div class="token"><i style="background:var(--accent)"></i><b>Accent</b></div>
+            <div class="token"><i style="background:var(--strong)"></i><b>Emphasis</b></div>
+          </div>
+        </div>
+        <p class="note">Status is told with words and lightness. Downloading, seeding, stopped, and errors stay in this hue. Preset dots are the only other hues, and they exist only as choices. The hue is yours. Lightness is adjusted so text stays readable.</p>
+      </div>
+    </main>
+  </div>
+</body>
+</html>

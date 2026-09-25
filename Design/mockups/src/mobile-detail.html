@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Torrent detail, phone</title>
+  <link rel="stylesheet" href="../mockup.css">
+  <style>
+    html, body, .phone, .sheet { width: 100%; max-width: 100%; min-width: 0; }
+    .segment { display: grid !important; grid-template-columns: repeat(4, minmax(0, 1fr)); }
+    .segment button, .actionbar button { min-width: 0 !important; }
+    .actionbar { display: flex !important; width: 100%; }
+    .actionbar button { flex: 1 1 0; }
+  </style>
+</head>
+<body>
+  <div class="phone">
+    <div class="sheet">
+      <header>
+        <button class="back" type="button">Back</button>
+        <h1>Ubuntu 24.04.1 desktop amd64</h1>
+        <div class="sub">Downloading</div>
+        <span class="bar wide-bar"><span style="width:62%"></span></span>
+        <div class="pct">62%</div>
+      </header>
+      <div class="segment" role="tablist">
+        <button class="active" type="button">Overview</button>
+        <button type="button">Files</button>
+        <button type="button">Peers</button>
+        <button type="button">Trackers</button>
+      </div>
+      <div class="body">
+        <div class="stats">
+          <div><span>Down</span><strong>2.1 MB/s</strong></div>
+          <div><span>Up</span><strong>41 kB/s</strong></div>
+          <div><span>ETA</span><strong>18 min</strong></div>
+          <div><span>Ratio</span><strong>0.08</strong></div>
+          <div><span>Downloaded</span><strong>3.6 GB</strong></div>
+          <div><span>Size</span><strong>5.8 GB</strong></div>
+        </div>
+        <div class="meta">
+          <div><span>Location</span><strong>/data/downloads</strong></div>
+          <div><span>Labels</span><strong>linux</strong></div>
+          <div><span>Peers</span><strong>38 connected</strong></div>
+          <div><span>Hash</span><strong class="hash">a4c8e1b09f673d2a<br>5c8e91b047d6f3a29c1e5b78</strong></div>
+        </div>
+      </div>
+      <div class="actionbar">
+        <button class="ghost" type="button">Stop</button>
+        <button class="ghost" type="button">Verify</button>
+        <button class="primary" type="button">More</button>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

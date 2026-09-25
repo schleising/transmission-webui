@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Sign in</title>
+  <link rel="stylesheet" href="../mockup.css">
+</head>
+<body>
+  <main class="login">
+    <form class="login-card">
+      <div class="brand">
+        <span class="mark" aria-hidden="true">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+            <path d="M8 3v7M4.8 7.8 8 11.2 11.2 7.8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </span>
+        Transmission
+      </div>
+      <h1>Sign in</h1>
+      <p>Use the username and password from Transmission’s RPC settings.</p>
+      <label for="user">Username</label>
+      <input id="user" name="username" autocomplete="username" value="transmission">
+      <label for="pass">Password</label>
+      <input id="pass" name="password" type="password" autocomplete="current-password" value="password">
+      <button class="primary" type="button">Unlock</button>
+      <p class="fine">The password is checked by Transmission. It stays in memory for this tab and is not saved on this device.</p>
+    </form>
+  </main>
+</body>
+</html>

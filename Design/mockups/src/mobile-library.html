@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Library, phone</title>
+  <link rel="stylesheet" href="../mockup.css">
+  <style>
+    html, body, .phone { width: 100%; max-width: 100%; min-width: 0; }
+    .tabbar { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); width: 100%; }
+    .chips { max-width: 100%; }
+  </style>
+</head>
+<body>
+  <div class="phone">
+    <div class="phone-top">
+      <h1>Transmission</h1>
+      <button class="icon-btn" type="button" aria-label="Add torrent">+</button>
+    </div>
+    <div class="rate-line">
+      <span>Down <strong>2.3 MB/s</strong></span>
+      <span>Up <strong>687 kB/s</strong></span>
+    </div>
+    <div class="search-wrap">
+      <input class="search" type="search" placeholder="Filter by name" aria-label="Filter by name">
+    </div>
+    <div class="chips" aria-label="Filters">
+      <button class="active" type="button">All</button>
+      <button type="button">Downloading</button>
+      <button type="button">Seeding</button>
+      <button type="button">Stopped</button>
+      <button type="button">Error</button>
+    </div>
+    <div class="cards">
+      <article class="card">
+        <h2>Ubuntu 24.04.1 desktop amd64</h2>
+        <div class="sub">Downloading</div>
+        <span class="bar" style="width:100%"><span style="width:62%"></span></span>
+        <div class="card-meta">2.1 MB/s down · 41 kB/s up · 5.8 GB · 18 min</div>
+      </article>
+      <article class="card">
+        <h2>Blender 4.2 demo reel</h2>
+        <div class="sub">Seeding</div>
+        <span class="bar" style="width:100%"><span style="width:100%"></span></span>
+        <div class="card-meta">640 kB/s up · 186 MB · ratio 2.40</div>
+      </article>
+      <article class="card">
+        <h2>Gutenberg science shelf</h2>
+        <div class="sub">Downloading</div>
+        <span class="bar" style="width:100%"><span style="width:14%"></span></span>
+        <div class="card-meta">180 kB/s down · 240 MB · 1 h 12 min</div>
+      </article>
+      <article class="card">
+        <h2>Debian 12 netinst amd64</h2>
+        <div class="sub">Stopped</div>
+        <span class="bar muted" style="width:100%"><span style="width:100%"></span></span>
+        <div class="card-meta">629 MB · ratio 1.05</div>
+      </article>
+      <article class="card">
+        <h2>Fedora 40 workstation</h2>
+        <div class="sub error">Connection failed</div>
+        <span class="bar strong" style="width:100%"><span style="width:8%"></span></span>
+        <div class="card-meta">2.1 GB · 8%</div>
+      </article>
+    </div>
+    <nav class="tabbar" aria-label="Sections">
+      <button class="active" type="button">Torrents</button>
+      <button type="button">Activity</button>
+      <button type="button">Settings</button>
+    </nav>
+  </div>
+</body>
+</html>
