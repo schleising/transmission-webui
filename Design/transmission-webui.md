@@ -1,6 +1,6 @@
 # Transmission WebUI
 
-A browser interface for a Transmission daemon. It is a static page: the browser talks to Transmission directly, the page keeps no server of its own, and the only password is the one Transmission already requires.
+A browser interface for a Transmission daemon. Several daemons can run at once. Each one serves this same static page from its own `TRANSMISSION_WEB_HOME`. The page keeps no server of its own, and the only password is the one that daemon already requires. Remote access goes through nginx, which proxies to that daemon and does not host a second copy of the files.
 
 This document is the design. It is not an implementation. The pictures are mockups of the default teal theme, filled with sample torrents so the layout can be judged.
 
@@ -13,7 +13,7 @@ Target daemon: Transmission 4.0 or newer. The wire protocol is the bespoke RPC d
 - A `409` response yields a new `X-Transmission-Session-Id`. The client stores that value and sends the same request again with the header set.
 - While the library is open, the client polls `torrent-get` every 2 seconds for `id`, `name`, `status`, `percentDone`, `rateDownload`, `rateUpload`, `eta`, `totalSize`, `uploadRatio`, and `errorString`.
 - The same screen manages the session: add, start, stop, verify, reannounce, queue, files, peers, trackers, labels, speed limits, and the rest of the session settings Transmission exposes.
-- The chrome is hues of one colour, including the favicon. Settings lets the person pick that colour, and choose light, dark, or match the system.
+- The chrome is hues of one colour, including the favicon. Each Transmission instance has its own colour, so tabs, icons, and installed apps are easy to tell apart. Settings on that instance chooses the colour, and light, dark, or match the system.
 - Torrent status, speeds, and session facts are whatever Transmission last reported. A setting changes on screen only after the daemon accepts it and a follow-up read returns the new value.
 - The shell is laid out with CSS flex and grid.
 - The page is installable as a PWA.
@@ -25,16 +25,19 @@ Target daemon: Transmission 4.0 or newer. The wire protocol is the bespoke RPC d
 ```mermaid
 flowchart LR
   person[Person]
-  ui[WebUI]
-  rpc["POST /transmission/rpc"]
-  daemon[Transmission daemon]
-
-  person --> ui
-  ui --> rpc
-  rpc --> daemon
+  subgraph local [On this machine]
+    d1[Daemon A]
+    d2[Daemon B]
+  end
+  nginx[nginx]
+  person -->|localhost and the daemon port| d1
+  person -->|localhost and the daemon port| d2
+  person -->|remote hostname| nginx
+  nginx -->|one hostname each| d1
+  nginx -->|one hostname each| d2
 ```
 
-The page and the RPC endpoint share an origin. Script can read `X-Transmission-Session-Id` only on a same-origin response. A second origin would hide that header unless a proxy explicitly exposed it, so cross-origin use is out of scope.
+Each daemon serves the same interface from its own `TRANSMISSION_WEB_HOME`. The page and `/transmission/rpc` for that daemon share an origin. Script can read `X-Transmission-Session-Id` on that origin. A page loaded from one instance never calls another instance’s RPC.
 
 ```mermaid
 flowchart TB
@@ -56,52 +59,81 @@ There is no application backend. Credentials, the session id, and the torrent li
 
 ## 3. Hosting
 
-Serve the static files and proxy the RPC on one host.
+The interface is always served by Transmission from `TRANSMISSION_WEB_HOME`. nginx does not keep a copy of the files. It reverse-proxies remote access to the daemon that owns that hostname.
+
+Build output is a directory of static files: HTML, CSS, JavaScript, the manifest, and the service worker. Copy that directory to each daemon’s `TRANSMISSION_WEB_HOME`. Several daemons may share one read-only copy of the directory. Each process still has its own port, config directory, RPC password, and whitelist.
+
+Transmission then serves:
+
+| Path | What it is |
+|---|---|
+| `/transmission/web/` | This interface |
+| `/transmission/rpc` | That daemon’s RPC |
+
+The client calls the absolute path `/transmission/rpc`. From a page at `/transmission/web/`, that path is the same host, so it reaches the daemon which served the page. Locally that host is `127.0.0.1` and the daemon’s port. Remotely it is the public hostname nginx sends to that daemon.
+
+Give every instance its own public hostname. A shared hostname would share the HTTP password cache, `localStorage`, and the installed PWA, and the colours would no longer separate the instances.
 
 ```nginx
 server {
   listen 443 ssl;
-  server_name transmission.example;
-
-  root /var/www/transmission-webui;
+  server_name media.example;
 
   add_header Content-Security-Policy "default-src 'self'; connect-src 'self'; style-src 'self'; script-src 'self'; manifest-src 'self'; img-src 'self' data: blob:; worker-src 'self'; base-uri 'none'; form-action 'none'" always;
 
-  location / {
-    try_files $uri /index.html;
-  }
-
-  location /transmission/rpc {
+  location /transmission/ {
     proxy_pass http://127.0.0.1:9091;
     proxy_set_header Host $host;
+    proxy_set_header Authorization $http_authorization;
+  }
+}
+
+server {
+  listen 443 ssl;
+  server_name archive.example;
+
+  add_header Content-Security-Policy "default-src 'self'; connect-src 'self'; style-src 'self'; script-src 'self'; manifest-src 'self'; img-src 'self' data: blob:; worker-src 'self'; base-uri 'none'; form-action 'none'" always;
+
+  location /transmission/ {
+    proxy_pass http://127.0.0.1:9092;
+    proxy_set_header Host $host;
+    proxy_set_header Authorization $http_authorization;
   }
 }
 ```
 
-The `Host` value that reaches Transmission must be allowed by `rpc-host-whitelist`. Localhost and IP addresses are always allowed. If the proxy forwards the public hostname, add that name to the whitelist.
+`proxy_pass` has no URI path of its own, so `/transmission/web/` and `/transmission/rpc` reach that daemon unchanged. nginx forwards `Authorization` and `401` responses, including `WWW-Authenticate`. It does not answer the password challenge and it does not insert a password.
 
-The proxy forwards `Authorization` unchanged and does not add a password of its own. The page sends the password itself. Terminate TLS on any interface that is not only localhost, because the password travels as HTTP Basic.
+The `Host` value that reaches a daemon must be on that daemon’s `rpc-host-whitelist`. Localhost and IP addresses are already allowed, which covers direct local use. Add each public hostname to the whitelist of the daemon it proxies to.
 
-Transmission can also serve the files from `TRANSMISSION_WEB_HOME`. In that mode the daemon applies `rpc-authentication-required` to the HTML as well as the RPC, so the browser shows its own sign-in dialogue before the page’s lock screen. Prefer the reverse proxy when a single password prompt matters. The RPC path in the client is always the absolute path `/transmission/rpc`, which is correct both at `/` and at `/transmission/web/`.
+Terminate TLS on nginx for remote access. The password travels as HTTP Basic.
 
-Build output is a static directory: one HTML file, CSS, and JavaScript. A bundler is optional. The palette is applied by a small script in the document head so the first paint already has the saved colour.
+The palette script in the document head runs before the first paint and applies the colour saved for this origin.
 
 ## 4. Signing in
 
 Transmission checks the password. The page does not keep a second one, and it does not read `settings.json`.
 
-The password Transmission expects is the plaintext configured as `rpc-password`, sent with the username from `rpc-username`. Transmission stores only a hash of that password. The page never sees the hash.
+The password Transmission expects is the plaintext configured as `rpc-password`, sent with the username from `rpc-username`. Transmission stores only a hash of that password. The page never sees the hash. Each daemon has its own username and password. Signing in to one instance does not sign in to another, because each public hostname is its own origin, and each local port is its own origin too.
 
-On load, before any torrent data is drawn, the client probes `session-get` with no `Authorization` header.
+Because the daemon serves the files, `rpc-authentication-required` applies to `/transmission/web/` as well as `/transmission/rpc`. The browser’s sign-in dialogue is the first gate, locally and through nginx. The document does not load until Transmission accepts the password. RPC calls use the browser’s cached credentials for that origin (`fetch` credentials stay `same-origin`). The page sends an explicit `Authorization` header when the person has just typed the password into the lock screen, so that typed password is the one checked.
 
-| Probe result | What the page does |
+On load, before any torrent data is drawn, the client probes `session-get` with `credentials: 'omit'`, so the browser does not attach the password it used to load the page. That is how the page tells a daemon that requires a password from one that does not.
+
+| First probe, credentials omitted | What the page does |
 |---|---|
-| `409`, then `401` after the session-id retry | Authentication is on. Show the lock screen. Keep the session id. |
-| `401` immediately | Same as above. |
+| `401`, including after the `409` retry | Authentication is on. Keep the session id. Send `session-get` again with `credentials: 'same-origin'`. |
 | `200` with `result: "success"` | Authentication is off. Show a blocking explanation: turn on RPC authentication in Transmission, then reload. Do not draw the library. |
 | Network error or HTTP 5xx | Show “Transmission did not respond” and a way to try the probe again. |
 
-The lock screen asks for the username and password. The username may be saved in `localStorage` under `twui.username`. The password is held in memory for the tab and is cleared on lock, on `401`, and when the tab closes. It is never written to `localStorage`, `sessionStorage`, the URL, or a log.
+| Second probe, browser credentials included | What the page does |
+|---|---|
+| `200` with `result: "success"` | The browser’s password was accepted. Open the library. Do not show the lock screen. |
+| `401` | Show the lock screen for this instance. |
+
+The lock screen asks for the username and password of this instance. The username may be saved in `localStorage` under `twui.username` for this origin only. The password is held in memory for the tab and is cleared on lock, on `401`, and when the tab closes. It is never written to `localStorage`, `sessionStorage`, the URL, or a log.
+
+A normal visit therefore asks once, in the browser dialogue, and then opens the library in this instance’s colour. Lock, in the toolbar, hides the library and shows the form. The next RPC call waits until that form is submitted with an explicit `Authorization` header.
 
 Submitting the form calls `session-get` with `Authorization: Basic …`. The value is the base64 of the UTF-8 bytes of `username:password`, not the result of `btoa` on a JavaScript string that may contain characters outside Latin-1.
 
@@ -118,23 +150,25 @@ A later `401` on any call, including a poll, clears the in-memory list and retur
 ```mermaid
 sequenceDiagram
   actor Person
-  participant UI as WebUI
-  participant RPC as /transmission/rpc
+  participant Browser
+  participant Edge as nginx or the daemon port
+  participant Daemon as This Transmission instance
 
-  UI->>RPC: POST session-get, no password
-  RPC-->>UI: 409 and X-Transmission-Session-Id
-  UI->>RPC: POST session-get with session id
-  RPC-->>UI: 401
-  UI-->>Person: Lock screen
-  Person->>UI: Username and password
-  UI->>RPC: POST session-get with Basic auth and session id
-  alt Password rejected
-    RPC-->>UI: 401
-    UI-->>Person: Password was not accepted
-  else Password accepted
-    RPC-->>UI: 200 session
-    UI-->>Person: Library
-  end
+  Person->>Browser: Open this instance
+  Browser->>Edge: GET /transmission/web/
+  Edge->>Daemon: forwarded unchanged
+  Daemon-->>Browser: 401 and WWW-Authenticate
+  Browser-->>Person: Sign-in dialogue for this instance
+  Person->>Browser: RPC username and password for this instance
+  Browser->>Edge: GET /transmission/web/ with Authorization
+  Edge->>Daemon: forwarded
+  Daemon-->>Browser: The interface
+  Browser->>Edge: POST /transmission/rpc session-get
+  Edge->>Daemon: forwarded
+  Daemon-->>Browser: 409 and X-Transmission-Session-Id
+  Browser->>Daemon: session-get with that header
+  Daemon-->>Browser: 200 session
+  Browser-->>Person: Library in the colour saved for this instance
 ```
 
 ```mermaid
@@ -317,7 +351,7 @@ Toggles, selects, and checkboxes show the last read value the whole time. They m
 
 These values are always a read, never a local guess: `status`, `percentDone`, rates, `eta`, `uploadRatio`, `errorString`, peer and file progress, `session-stats`, free space, `port-is-open`, and `blocklist-size`.
 
-Appearance is the exception. Transmission has no field for the base colour, so that choice applies in the page as soon as it is picked, including the favicon. It is not reported as a daemon setting.
+Appearance is the exception. Transmission has no field for the base colour, so that choice applies in the page as soon as it is picked, including the favicon. It is stored for this origin only, and it is not reported as a daemon setting. The hostname shown in the sidebar is the real address of this instance, from `location.host`, not a name the person typed.
 
 ## 8. Library
 
@@ -441,7 +475,7 @@ Structure is CSS flex and grid. Floats are not used. `position` is not used to p
 
 Regions:
 
-- The sidebar is a column flex: brand, section links, a scrolling filter group (`minmax(0, 1fr)`), then speeds.
+- The sidebar is a column flex: brand, the instance host (`location.host`), section links, a scrolling filter group (`minmax(0, 1fr)`), then speeds.
 - The toolbar is a row flex. The filter field grows (`flex: 1`). Actions sit at the end and do not shrink below their text.
 - Each library row on a wide window is a grid with the same column template as the header: name, progress, size, down, up, ETA, ratio. Name takes the remaining space (`minmax(0, 1fr)`). Numeric columns are `max-content`.
 - Phone cards are a grid of rows inside a column flex. The bottom bar does not scroll away with the cards.
@@ -456,18 +490,22 @@ The reconnecting banner sits above the list and does not cover the last row. Emp
 
 ## 12. Colour
 
-The interface is painted from one colour. The person picks that colour in Settings. Backgrounds, text, borders, the accent, the progress bar, emphasis, and the favicon all use its hue. Lightness and chroma change. The hue does not.
+Several Transmission daemons can be open at once. Each one is its own origin, and each origin keeps its own colour. The colour is how a person tells those instances apart: the page, the favicon, the browser chrome, and the installed icon. The host name under the brand is the real address, so the instance is still identifiable if two colours are close.
 
-Preset swatches are samples of other base colours. They are the only place a second hue appears, and only as a choice. Choosing one repaints the whole interface, including Settings.
+The person picks the colour in Settings on that instance. Backgrounds, text, borders, the accent, the progress bar, emphasis, and the favicon all use its hue. Lightness and chroma change. The hue does not. Changing it does not change any other instance.
+
+Preset swatches are samples of other base colours. They are the only place a second hue appears, and only as a choice. Choosing one repaints this instance, including Settings. The settings text says: “This colour marks this Transmission instance. Other instances keep their own.”
 
 ![Appearance settings. The base colour is the default teal.](mockups/settings-desktop.png)
 
 Default base colour: `#14756F`.
 
-Stored in `localStorage`:
+Stored in `localStorage` for this origin only:
 
 - `twui.baseColor` — the picked sRGB colour, default `#14756F`
 - `twui.appearance` — `light`, `dark`, or `system`
+
+A second daemon, on another port or another public hostname, has its own `localStorage` and starts from the default until a colour is chosen there. The default is the same teal so an unconfigured instance is still usable. After that, the two favicons and themes diverge.
 
 `system` follows `prefers-color-scheme`. The head script reads both keys and sets the CSS variables before the first paint.
 
@@ -505,7 +543,7 @@ Progress fill:
 
 Selection is a soft wash of the accent, with the accent used for the current nav item.
 
-The settings sentence next to the control: “The hue is yours. Lightness is adjusted so text stays readable.”
+The settings sentence next to the control: “This colour marks this Transmission instance. Lightness is adjusted so text stays readable.”
 
 `prefers-reduced-motion` disables decorative motion. Verifying does not depend on an animated stripe.
 
@@ -525,18 +563,19 @@ The page meets the install criteria for a standalone web app: HTTPS (or localhos
 
 | Field | Value |
 |---|---|
-| `name` | Transmission |
-| `short_name` | Transmission |
-| `start_url` | `/` |
-| `scope` | `/` |
+| `name` | Transmission, plus this instance’s host |
+| `short_name` | The host, so two installed apps are not both called Transmission |
+| `id` | The origin, so each instance installs separately |
+| `start_url` | `/transmission/web/` |
+| `scope` | `/transmission/web/` |
 | `display` | `standalone` |
 | `background_color` | The current background token |
 | `theme_color` | The current accent |
 | `icons` | PNG at 192 and 512, plus a maskable 512. The mark and colours match the favicon. |
 
-The shipped manifest uses the default teal so the app can be installed on the first visit. After the palette exists, the page draws the 192 and 512 icons on a canvas and stores them, with a manifest that points at them, for the service worker to serve at `/manifest.webmanifest` and `/icons/icon-192.png` and `/icons/icon-512.png`. A later install uses the colour saved at that moment. The live favicon and `theme-color` already follow every change, including in an installed copy.
+The manifest, icons, and service worker live in `TRANSMISSION_WEB_HOME` and are requested under `/transmission/web/`. The shipped manifest uses the default teal so the app can be installed on the first visit. After the palette exists, the page draws the 192 and 512 icons on a canvas and stores them, with a manifest that points at them, for the service worker to serve at `/transmission/web/manifest.webmanifest`, `/transmission/web/icons/icon-192.png`, and `/transmission/web/icons/icon-512.png`. A later install of this instance uses the colour saved for this origin. Another instance installs as a separate app with its own icon. The live favicon and `theme-color` already follow every change, including in an installed copy.
 
-The service worker caches the app shell (HTML, CSS, and script) so a repeat visit can open the shell. It does not cache `/transmission/rpc`. Those requests are always made on the network. A cached shell with no network shows the unreachable state from section 4, and it does not replay old torrent lists as if they were current.
+The service worker is registered at `/transmission/web/sw.js`, so its scope is `/transmission/web/`. It caches the app shell under that path so a repeat visit can open the shell. `/transmission/rpc` is outside that scope, so the worker never sees it and never caches it. Those requests always go to the daemon that served the page, directly or through nginx. A cached shell with no network shows the unreachable state from section 4, and it does not replay old torrent lists as if they were current.
 
 ## 14. When things fail
 
@@ -571,11 +610,12 @@ The interface is ready when all of the following hold.
 5. Hiding the tab stops the poll. Showing it polls immediately.
 6. A `401` during a poll returns to the lock screen and drops the torrent list from the page.
 7. Add by file and add by magnet both call `torrent-add`. Remove, remove-and-delete, start, stop, verify, and queue move call the methods in the tables above.
-8. Changing the base colour repaints every surface, text, control, and the favicon in that hue, in light and in dark, and the choice survives a reload. `theme-color` matches the accent.
+8. Changing the base colour on one instance repaints that instance’s surfaces, text, controls, and favicon, in light and in dark, and the choice survives a reload of that origin only. A second instance keeps its own colour. `theme-color` matches the accent. The sidebar shows `location.host`.
 9. At 390px width the library, a torrent, add, and settings are each usable without a horizontal page scroll. At 1440px the list and the inspector are on screen together. Those layouts are flex and grid.
 10. Status text is present for downloading, seeding, stopped, verifying, and errors. Every status uses the selected base colour, and every status string is a label for the latest `status` or `errorString` from `torrent-get`.
 11. After `session-set` or `torrent-set` fails, the control still shows the previous server value. After it succeeds, the control shows the value from the follow-up `session-get` or `torrent-get`, including when that differs from the value that was sent.
 12. Choosing Start leaves the status label unchanged until a later `torrent-get` reports a new `status`.
-13. The browser offers to install the page. The service worker does not answer `/transmission/rpc` from cache. Installed icons use the base colour that was current when they were generated.
+13. The browser offers to install the page served from `/transmission/web/`. Two hostnames install as two apps. The service worker’s scope is `/transmission/web/`, so it does not answer `/transmission/rpc`. Installed icons use the base colour saved for that instance.
+14. Opening the interface locally uses the daemon port. Opening it remotely uses nginx, which proxies `/transmission/` to that same daemon and forwards the password challenge. The files are the ones in `TRANSMISSION_WEB_HOME`.
 
 The mockups in this folder are static HTML under `mockups/src/`, rendered to the PNG files beside them. They show the default teal, not a live daemon.
