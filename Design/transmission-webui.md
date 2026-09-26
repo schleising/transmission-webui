@@ -62,7 +62,7 @@ There is no application backend. Credentials, the session id, and the torrent li
 
 ## 3. Hosting
 
-The interface is always served by Transmission from `TRANSMISSION_WEB_HOME`. nginx does not keep a second copy of the HTML, CSS, or scripts. It reverse-proxies remote access to the daemon that owns that hostname, and it is the process that stores `instance.json` when the colour or title is saved (section 12).
+The interface is always served by Transmission from `TRANSMISSION_WEB_HOME`. nginx does not keep a second copy of the HTML, CSS, or scripts. It reverse-proxies remote access to the daemon that owns that hostname.
 
 Two directories in this project:
 
@@ -80,18 +80,17 @@ Transmission then serves:
 | Path | What it is |
 |---|---|
 | `/transmission/web/` | This interface |
-| `/transmission/web/instance.json` | This instance’s colour and title |
 | `/transmission/rpc` | That daemon’s RPC |
 
 The client calls the absolute path `/transmission/rpc`. From a page at `/transmission/web/`, that path is the same host.
 
 ### Interface version
 
-The interface has one semantic version, a constant such as `1.0.0`. Settings shows it as “Interface 1.0.0”. The same string is the cache-busting query on every static file: `app.css?v1.0.0`, `app.js?v1.0.0`, `manifest.webmanifest?v1.0.0`, icon URLs, and `sw.js?v1.0.0`. The HTML links use that query. Raising the constant changes every URL, and the service worker drops the previous cache when it activates. `instance.json` is not versioned this way. It is always fetched with `cache: "no-store"`.
+The interface has one semantic version, a constant such as `1.0.0`. Settings shows it as “Interface 1.0.0”. The same string is the cache-busting query on every static file: `app.css?v1.0.0`, `app.js?v1.0.0`, `manifest.webmanifest?v1.0.0`, icon URLs, and `sw.js?v1.0.0`. The HTML links use that query. Raising the constant changes every URL, and the service worker drops the previous cache when it activates.
 
 ### nginx
 
-One server block per instance. The names below are placeholders. Use your LAN hostname and the names on your domain. Terminate TLS on nginx for remote access. `ngx_http_dav_module` and `ngx_http_auth_request_module` are required for the preferences file.
+One server block per instance. The names below are placeholders. Use your LAN hostname and the names on your domain. Terminate TLS on nginx for remote access.
 
 ```nginx
 server {
@@ -101,27 +100,6 @@ server {
   client_max_body_size 16m;
 
   add_header Content-Security-Policy "default-src 'self'; connect-src 'self'; style-src 'self'; script-src 'self'; manifest-src 'self'; img-src 'self' data: blob:; worker-src 'self'; base-uri 'none'; form-action 'none'" always;
-
-  location = /_transmission_auth {
-    internal;
-    proxy_pass http://127.0.0.1:9091/transmission/web/;
-    proxy_http_version 1.1;
-    proxy_set_header Connection "";
-    proxy_pass_request_body off;
-    proxy_set_header Content-Length "";
-    proxy_set_header Host $host;
-    proxy_set_header Authorization $http_authorization;
-  }
-
-  location = /transmission/web/instance.json {
-    alias /srv/transmission/media/web/instance.json;
-    dav_methods PUT;
-    create_full_put_path on;
-    client_max_body_size 16k;
-    limit_except GET HEAD PUT { deny all; }
-    auth_request /_transmission_auth;
-    add_header Cache-Control "no-store" always;
-  }
 
   location /transmission/ {
     proxy_pass http://127.0.0.1:9091;
@@ -140,7 +118,7 @@ server {
 }
 ```
 
-A second instance repeats the server with its own `server_name`, upstream port, and `alias`. The alias path is that daemon’s web home plus `instance.json`. In the test stack the file on the host is `Testing/webui-test/instance.json`. In deployment it is `Deployment/webui/instance.json` once that directory is `TRANSMISSION_WEB_HOME`.
+A second instance repeats the server with its own `server_name` and upstream port.
 
 `proxy_pass` has no URI path of its own, so `/transmission/web/` and `/transmission/rpc` reach the daemon unchanged. The extra headers are there because Transmission checks them:
 
@@ -158,11 +136,9 @@ A second instance repeats the server with its own `server_name`, upstream port, 
 
 The `Host` value that reaches a daemon must be on that daemon’s `rpc_host_whitelist`. Localhost and IP addresses are already allowed, which covers opening the daemon port directly. Add each public hostname to the whitelist of the daemon it proxies to.
 
-Local use is a hostname and port. In the test stack that is port 9091 on the daemon, which serves the UI, RPC, and `GET` of `instance.json`. Remote use is nginx on your domain.
+Local use is a hostname and port. In the test stack that is port 9091 on the daemon. Remote use is nginx on your domain.
 
-Saving colour or title is `PUT /transmission/web/instance.json`. Transmission serves files from the web home and does not store a PUT body, so the nginx `location` above is what writes the file. The hostname:port used to change colour or title is an nginx listener with that same location, proxying every other `/transmission/` URL to the daemon. A repeat of the server block with `listen 8080` and `server_name` set to the LAN hostname does this in front of port 9091. After a save, `instance.json` in the web home holds the new values, and the next open or refresh — on `:9091` or on the domain — reads them.
-
-The document head paints the default teal before `instance.json` returns, so the first frame has a colour. The title occupies a fixed-height placeholder until that file arrives.
+The document head paints the default teal, and the title occupies a fixed-height placeholder, until the colour and title saved for this instance have been applied.
 
 ## 4. Signing in
 
@@ -222,7 +198,7 @@ sequenceDiagram
   Daemon-->>Browser: 409 and X-Transmission-Session-Id
   Browser->>Daemon: session_get with that header
   Daemon-->>Browser: 200 session
-  Browser-->>Person: Library after instance.json and the first poll
+  Browser-->>Person: Library after the saved colour and the first poll
 ```
 
 ```mermaid
@@ -422,7 +398,7 @@ Toggles, selects, and checkboxes show the last read value the whole time. They m
 
 These values are always a read, never a local guess: `status`, `percent_done`, rates, `eta`, `upload_ratio`, `error_string`, peer and file progress, `session_stats`, free space, `port_is_open`, and `blocklist_size`.
 
-Colour and the page title are the other case. They are not Transmission fields. They change on this page when the save of `instance.json` succeeds, and other devices see them on their next open or refresh (section 12). The hostname shown in the sidebar is the real address of this instance, from `location.host`. The page title is a label the person sets so two instances are easy to tell apart. It is not a substitute for the host.
+Colour and the page title are the other case. They are not Transmission fields. They update on this page when the change is stored, and other devices see them the next time they open or refresh this instance (section 12). The hostname shown in the sidebar is the real address of this instance, from `location.host`. The page title is a label the person sets so two instances are easy to tell apart. It is not a substitute for the host.
 
 ## 8. Library
 
@@ -517,7 +493,7 @@ Settings reads `session_get` when the section opens and again after each success
 
 | Section | What it edits |
 |---|---|
-| Appearance | This instance’s base colour and page title, saved in `instance.json`. Light, dark, or system, stored on this browser only. None of these are Transmission fields. The interface version is shown here. |
+| Appearance | This instance’s base colour and page title. Light, dark, or system, stored on this browser only. None of these are Transmission fields. The interface version is shown here. |
 | Speed | `speed_limit_down`, `speed_limit_down_enabled`, `speed_limit_up`, `speed_limit_up_enabled`, `alt_speed_down`, `alt_speed_up`, `alt_speed_enabled`, `alt_speed_time_enabled`, `alt_speed_time_begin`, `alt_speed_time_end`, `alt_speed_time_day` |
 | Downloads | `download_dir`, `incomplete_dir`, `incomplete_dir_enabled`, `start_added_torrents`, `rename_partial_files`, `trash_original_torrent_files` |
 | Seeding | `seed_ratio_limited`, `seed_ratio_limit`, `idle_seeding_limit_enabled`, `idle_seeding_limit` |
@@ -580,22 +556,13 @@ Preset swatches are samples of other base colours. They are the only place a sec
 
 Default base colour: `#14756F`.
 
-Colour and title are the instance’s sync storage: one file both the desktop and the phone read, applied on open and on refresh. The file is `instance.json` in that daemon’s web home:
+Colour and title are stored for this instance. The page reads them when it opens and when it is refreshed, and does not read them again until the next open or refresh. With nothing saved yet, the colour is `#14756F` and the title is `Transmission`. A change made on the desktop is what the phone shows the next time that phone opens or refreshes this same instance. An already open page is left as it is.
 
-```json
-{
-  "base_colour": "#14756F",
-  "title": "Media"
-}
-```
+The colour control and the title field stay disabled until the change has been stored. Success applies the saved colour, favicon, and title on this page. Failure leaves the previous values and enables the controls.
 
-On every open and every refresh the page fetches `GET /transmission/web/instance.json` with `cache: "no-store"` and applies `base_colour` and `title`. It does not fetch the file again until the next open or refresh. A missing or unreadable file uses `#14756F` and the title `Transmission`. A change made on the desktop is what the phone shows the next time that phone opens or refreshes this same instance. An already open page is left as it is.
+Light, dark, and system stay on the device, in `localStorage` under `twui.appearance` (`light`, `dark`, or `system`). `system` follows `prefers-color-scheme`. The head script applies the default teal before the first paint, then replaces the tokens when the saved colour arrives. The title slot is a fixed height the whole time, so the header does not jump.
 
-Saving sends `PUT /transmission/web/instance.json` with the new document, using the same credentials as RPC. The colour control and the title field stay disabled until that response succeeds. Success applies the saved colour, favicon, and title on this page. Failure leaves the previous values and enables the controls. nginx writes the body onto the web-home file (section 3). That file is the copy the other device reads. Colour and title are taken from this file alone.
-
-Light, dark, and system stay on the device, in `localStorage` under `twui.appearance` (`light`, `dark`, or `system`). They are not in `instance.json`. `system` follows `prefers-color-scheme`. The head script applies the default teal before the first paint, then replaces the tokens when `instance.json` returns. The title slot is a fixed height the whole time, so the header does not jump.
-
-A second daemon has its own web home and its own `instance.json`. It starts from the default until a colour and title are saved there.
+A second daemon starts from the default until a colour and title are saved there.
 
 How a pick becomes a palette:
 
@@ -639,7 +606,7 @@ The settings sentence next to the control: “This colour marks this Transmissio
 
 The favicon is the same mark as the sidebar: a rounded square in the accent, and a downward arrow in the on-accent colour. It is an SVG document the page builds from the current palette and assigns to `<link rel="icon" type="image/svg+xml">`.
 
-The first paint uses the default teal. When `instance.json` returns, and again when a colour save succeeds or light and dark changes, the page rebuilds the SVG and replaces the link. `<meta name="theme-color">` is set to the same accent at the same time, which colours the browser chrome and the installed app’s title bar.
+The first paint uses the default teal. When the saved colour arrives, and again when a colour save succeeds or light and dark changes, the page rebuilds the SVG and replaces the link. `<meta name="theme-color">` is set to the same accent at the same time, which colours the browser chrome and the installed app’s title bar.
 
 `prefers-color-scheme` is the CSS media feature used when appearance is `system`. The name is the platform spelling and stays as written.
 
@@ -661,9 +628,9 @@ The page meets the install criteria for a standalone web app: HTTPS (or localhos
 | `theme_color` | The current accent |
 | `icons` | PNG at 192 and 512, plus a maskable 512. The mark and colours match the favicon. |
 
-The manifest, icons, and service worker live in `TRANSMISSION_WEB_HOME` and are requested under `/transmission/web/`, each URL carrying `?vX.Y.Z` from section 3. The shipped manifest uses the default teal so the app can be installed on the first visit. After `instance.json` has been applied, the page draws the 192 and 512 icons on a canvas from that palette. The manifest `name` and `short_name` include the title from the same file. Another instance installs as a separate app with its own icon and title. The live favicon and `theme-color` follow a successful colour save on this page. Other devices take the new colour and title the next time they open or refresh.
+The manifest, icons, and service worker live in `TRANSMISSION_WEB_HOME` and are requested under `/transmission/web/`, each URL carrying `?vX.Y.Z` from section 3. The shipped manifest uses the default teal so the app can be installed on the first visit. After the saved colour and title have been applied, the page draws the 192 and 512 icons on a canvas from that palette. The manifest `name` and `short_name` include the title. Another instance installs as a separate app with its own icon and title. The live favicon and `theme-color` follow a successful colour save on this page. Other devices take the new colour and title the next time they open or refresh.
 
-The service worker is registered at `/transmission/web/sw.js?vX.Y.Z`, so its scope is `/transmission/web/`. It caches the app shell, including the version query, so a repeat visit can open the shell. It does not cache `instance.json` or `/transmission/rpc`. RPC is outside the worker’s scope, so those requests always go to the daemon that served the page, directly or through nginx. A cached shell with no network shows the unreachable state from section 4, and it does not replay old torrent lists as if they were current. Activating a worker for a new version deletes caches from the previous `?v` query.
+The service worker is registered at `/transmission/web/sw.js?vX.Y.Z`, so its scope is `/transmission/web/`. It caches the app shell, including the version query, so a repeat visit can open the shell. It does not cache `/transmission/rpc`. RPC is outside the worker’s scope, so those requests always go to the daemon that served the page, directly or through nginx. A cached shell with no network shows the unreachable state from section 4, and it does not replay old torrent lists as if they were current. Activating a worker for a new version deletes caches from the previous `?v` query.
 
 ## 14. When things fail
 
@@ -700,7 +667,7 @@ The interface is ready when all of the following hold.
 5. Hiding the tab stops the poll. Showing it polls immediately.
 6. A `401` during a poll returns to the lock screen and drops the torrent list from the page.
 7. Add by file and add by magnet both call `torrent_add`. Remove, remove-and-delete, start, stop, verify, and queue move call the methods in the tables above. Stop is the pause action. Selecting several torrents sends one call with those `ids`.
-8. Changing the base colour or the page title on one instance writes `instance.json` in that instance’s web home, then repaints that page, including the favicon and `document.title`. A second browser of the same instance shows the new colour and title after it is opened or refreshed, and does not change while it stays open. A second instance keeps its own file. `theme-color` matches the accent. The sidebar shows `location.host`. Light and dark stay on the browser that set them.
+8. Changing the base colour or the page title on one instance repaints that page, including the favicon and `document.title`, once the change is stored. A second browser of the same instance shows the new colour and title after it is opened or refreshed, and does not change while it stays open. A second instance keeps its own colour and title. `theme-color` matches the accent. The sidebar shows `location.host`. Light and dark stay on the browser that set them.
 9. At 390px width the library, a torrent, add, and settings are each usable without a horizontal page scroll and without the document scrolling. At 1440px the list and the inspector are on screen together. Those layouts are flex and grid. Lists scroll inside the app.
 10. Status text is present for downloading, seeding, stopped, verifying, and errors. Every status uses the selected base colour, and every status string is a label for the latest `status` or `error_string` from `torrent_get`. An unknown `eta` is ∞. Speeds, sizes, ratios, and dates are human-readable.
 11. After `session_set` or `torrent_set` fails, the control still shows the previous server value and is enabled again. After it succeeds, the control shows the value from the follow-up `session_get` or `torrent_get`, including when that differs from the value that was sent. While the write is in flight, that control ignores further input.
