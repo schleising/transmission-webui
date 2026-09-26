@@ -294,7 +294,6 @@ canvas.pieces { display: block; width: 100%; height: auto; margin: 8px 0 4px; im
 .piece-key i { display: inline-block; width: 11px; height: 11px; margin-right: 5px; border-radius: 2px; vertical-align: -1px; }
 .piece-missing { background: #9a9a9a; }
 .piece-unavailable { background: #d32f2f; }
-.piece-active { background: #1976d2; }
 .piece-have { background: #00c853; }
 .peer-grid {
   display: grid;

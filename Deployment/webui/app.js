@@ -20,6 +20,7 @@
   var PRESETS = ["#14756F", "#1F4E79", "#5C4B8A", "#8C3A3A", "#3D6B4F"];
   var DAYS = [["Monday", 2], ["Tuesday", 4], ["Wednesday", 8], ["Thursday", 16], ["Friday", 32], ["Saturday", 64], ["Sunday", 1]];
   var pollTimer = null;
+  var pollGeneration = 0;
   var press = null;
   var suppressClick = false;
   var sort = { key: "name", dir: 1 };
@@ -91,7 +92,7 @@
     if (f === "checking") return torrent.status === 1 || torrent.status === 2;
     if (f === "error") return !!torrent.error_string;
     if (f === "active") return torrent.rate_download > 0 || torrent.rate_upload > 0;
-    if (f === "finished") return torrent.percent_done === 1;
+    if (f === "finished") return torrentComplete(torrent);
     return true;
   }
   function visibleTorrents() {
@@ -142,9 +143,6 @@
     if (state.view !== "torrents") return false;
     if (Twui.wide.matches) return state.selected.size >= 1;
     return state.detailOpen && state.selected.size === 1;
-  }
-  function labelsOnScreen() {
-    return Twui.wide.matches || state.view === "torrents";
   }
   function detailWanted() {
     return state.view === "torrents" && state.selected.size === 1 && (Twui.wide.matches || state.detailOpen);
@@ -256,20 +254,61 @@
     });
     return active;
   }
-  function pieceLabel(detail) {
-    var bits = pieceBits(detail);
+  function pieceLabel(detail, bits) {
+    bits = bits || pieceBits(detail);
     if (!bits) return "";
     return Twui.formatCount(bits.have) + " of " + Twui.formatCount(bits.count) + " pieces";
   }
-  function drawPieces(canvas, detail) {
-    var bits = pieceBits(detail);
+  function availabilityKey(list) {
+    var hash = list.length;
+    for (var i = 0; i < list.length; i++) hash = (hash * 33 + (Number(list[i]) + 2)) | 0;
+    return hash;
+  }
+  function piecesKey(text) {
+    text = text || "";
+    var hash = text.length;
+    for (var i = 0; i < text.length; i++) hash = (hash * 33 + text.charCodeAt(i)) | 0;
+    return hash;
+  }
+  function pieceStamp(detail, bits) {
+    var files = detail.files || [];
+    var stats = detail.file_stats || [];
+    var held = 0;
+    for (var i = 0; i < files.length; i++) {
+      var info = stats[i] || {};
+      var done = info.bytes_completed != null ? info.bytes_completed : files[i].bytes_completed;
+      held += Number(done) || 0;
+    }
+    return [
+      bits.count,
+      piecesKey(detail.pieces),
+      availabilityKey(detail.availability || []),
+      detail.status,
+      detail.sequential_download ? 1 : 0,
+      detail.sequential_download_from_piece || 0,
+      held
+    ].join(":");
+  }
+  function drawPieces(canvas, detail, bits) {
+    bits = bits || pieceBits(detail);
     if (!canvas || !bits) return;
     var width = canvas.parentElement ? canvas.parentElement.clientWidth : 0;
-    if (width < 40) width = 320;
+    if (width < 40) {
+      if (canvas.dataset.redraw) return;
+      canvas.dataset.redraw = "1";
+      requestAnimationFrame(function () {
+        delete canvas.dataset.redraw;
+        drawPieces(canvas, detail, bits);
+      });
+      return;
+    }
     var cell = window.matchMedia("(max-width: 719px)").matches ? 10 : 7;
+    var dpr = Math.min(window.devicePixelRatio || 1, 2);
+    var stamp = pieceStamp(detail, bits);
+    var layout = width + ":" + cell + ":" + dpr;
+    if (canvas.width > 0 && canvas.dataset.stamp === stamp && canvas.dataset.layout === layout) return;
     var cols = Math.max(1, Math.floor(width / cell));
     var rows = Math.ceil(bits.count / cols);
-    var dpr = Math.min(window.devicePixelRatio || 1, 2);
     canvas.width = Math.floor(cols * cell * dpr);
     canvas.height = Math.floor(rows * cell * dpr);
     canvas.style.height = (rows * cell) + "px";
@@ -281,42 +320,120 @@
     ctx.fillStyle = "#ffffff";
     ctx.fillRect(0, 0, cols * cell, rows * cell);
     var gap = 1;
-    function paint(kind) {
+    for (var i = 0; i < bits.count; i++) {
+      var peers = Number(availability[i]);
+      var kind = "missing";
+      if (pieceHas(bits, i) || peers === -1) kind = "have";
+      else if (peers === 0) kind = "unavailable";
+      else if (active[i]) kind = "active";
       ctx.fillStyle = colours[kind];
-      for (var i = 0; i < bits.count; i++) {
-        var have = pieceHas(bits, i);
-        var peers = Number(availability[i]);
-        var kindOf = "missing";
-        if (have || peers === -1) kindOf = "have";
-        else if (peers === 0) kindOf = "unavailable";
-        else if (active[i]) kindOf = "active";
-        if (kindOf !== kind) continue;
-        ctx.fillRect((i % cols) * cell, Math.floor(i / cols) * cell, cell - gap, cell - gap);
-      }
+      ctx.fillRect((i % cols) * cell, Math.floor(i / cols) * cell, cell - gap, cell - gap);
     }
-    paint("missing");
-    paint("unavailable");
-    paint("active");
-    paint("have");
+    canvas.dataset.stamp = stamp;
+    canvas.dataset.layout = layout;
+    canvas.dataset.count = String(bits.count);
+    if (!canvas.dataset.settled) {
+      canvas.dataset.settled = "1";
+      requestAnimationFrame(function () {
+        if (!canvas.isConnected) return;
+        delete canvas.dataset.layout;
+        drawPieces(canvas, detail);
+      });
+    }
   }
-  function mountPieces(root, detail) {
+  function inspectorShape(detail) {
+    return JSON.stringify([
+      detail.piece_count || 0,
+      (detail.files || []).length,
+      detail.hash_string || "",
+      detail.name || "",
+      detail.status === 1 || detail.status === 2 ? 1 : 0,
+      detail.comment ? 1 : 0,
+      state.groups && state.groups.length ? 1 : 0
+    ]);
+  }
+  function mountPieces(root, detail, bits) {
     if (!root) return;
     var canvas = root.querySelector("canvas.pieces");
-    if (canvas) drawPieces(canvas, detail);
+    if (canvas) drawPieces(canvas, detail, bits);
+  }
+  function inspectorStats(detail) {
+    var held = haveBytes(detail);
+    return {
+      down: Twui.formatSpeed(detail.rate_download, state.units),
+      up: Twui.formatSpeed(detail.rate_upload, state.units),
+      eta: Twui.formatDuration(detail.eta),
+      ratio: Twui.formatRatio(detail.upload_ratio),
+      size: Twui.formatBytes(detail.size_when_done, state.units),
+      have: Twui.formatBytes(held.total, state.units),
+      remaining: Twui.formatBytes(detail.left_until_done, state.units),
+      downloaded: Twui.formatBytes(detail.downloaded_ever, state.units),
+      uploaded: Twui.formatBytes(detail.uploaded_ever, state.units),
+      location: detail.download_dir || "",
+      peers: Twui.formatCount(detail.peers_connected),
+      queue: Twui.formatCount(detail.queue_position)
+    };
+  }
+  function sameInspector(inspector, detail) {
+    if (!inspector || inspector.dataset.detailId !== String(detail.id) || inspector.dataset.tab !== state.tab) return false;
+    if (inspector.dataset.shape !== inspectorShape(detail)) return false;
+    if (state.tab === "overview") {
+      var count = Number(detail.piece_count) || 0;
+      var canvas = inspector.querySelector("canvas.pieces");
+      if ((count > 0) !== !!canvas) return false;
+      return true;
+    }
+    if (state.tab === "files") return inspector.querySelectorAll("[data-file-done]").length === (detail.files || []).length;
+    return false;
   }
   function refreshInspectorLive(inspector, detail) {
     if (!inspector || !detail) return;
     var fraction = shownFraction(detail);
+    var bar = inspector.querySelector("[data-live-progress]");
+    if (bar) bar.className = barClass(detail);
     inspector.querySelectorAll("[data-live-progress] > span").forEach(function (fill) {
       fill.style.width = progressWidth(fraction);
     });
     inspector.querySelectorAll("[data-live-percent]").forEach(function (node) {
       node.textContent = progressText(fraction);
     });
-    inspector.querySelectorAll("[data-live-pieces]").forEach(function (node) {
-      node.textContent = pieceLabel(detail);
+    var live = inspectorStats(detail);
+    inspector.querySelectorAll("[data-live-stat]").forEach(function (node) {
+      var value = live[node.dataset.liveStat];
+      if (value == null || node.textContent === value) return;
+      node.textContent = value;
+      node.setAttribute("data-full", value);
     });
-    mountPieces(inspector, detail);
+    var verify = inspector.querySelector("[data-live-verify]");
+    if (verify) verify.textContent = "Verifying " + Twui.formatPercent(detail.recheck_progress);
+    var bits = pieceBits(detail);
+    var pieces = pieceLabel(detail, bits);
+    inspector.querySelectorAll("[data-live-pieces]").forEach(function (node) {
+      if (node.textContent !== pieces) node.textContent = pieces;
+    });
+    var canvas = inspector.querySelector("canvas.pieces");
+    if (canvas) canvas.setAttribute("aria-label", pieces);
+    mountPieces(inspector, detail, bits);
+    inspector.querySelectorAll("[data-torrent]").forEach(function (node) {
+      var key = node.dataset.torrent;
+      node.disabled = !!state.pendingKeys[key];
+      if (state.pendingKeys[key] || node === document.activeElement || !(key in detail || key === "labels")) return;
+      if (node.type === "checkbox") node.checked = !!detail[key];
+      else if (key === "labels") node.value = (detail.labels || []).join(", ");
+      else node.value = detail[key] == null ? "" : detail[key];
+    });
+    inspector.querySelectorAll("[data-file]").forEach(function (node) {
+      var index = Number(node.dataset.file);
+      var info = (detail.file_stats || [])[index] || {};
+      node.disabled = !!state.pendingKeys["file-" + index];
+      if (state.pendingKeys["file-" + index] || node === document.activeElement) return;
+      var wanted = "wanted" in info ? info.wanted : (detail.wanted || [])[index];
+      node.checked = !!wanted;
+    });
+    var trackers = inspector.querySelector("#tracker-list");
+    var saveTrackers = inspector.querySelector('[data-act="save-trackers"]');
+    if (trackers) trackers.disabled = !!state.pendingKeys.tracker_list;
+    if (saveTrackers) saveTrackers.disabled = !!state.pendingKeys.tracker_list;
     var files = detail.files || [];
     var stats = detail.file_stats || [];
     inspector.querySelectorAll("[data-file-done]").forEach(function (node) {
@@ -427,21 +544,28 @@
   }
   function tick() {
     if (state.mode !== "live" || document.hidden || state.inFlight) return;
+    var generation = pollGeneration;
+    var fetchLibrary = state.view === "torrents";
     state.inFlight = true;
-    Twui.rpc("torrent_get", { fields: LIBRARY_FIELDS }).then(function (list) {
-      state.torrents = list.torrents || [];
-      state.torrents.forEach(applyLibraryTorrent);
-      var alive = new Set(state.torrents.map(function (torrent) { return torrent.id; }));
-      Array.from(state.selected).forEach(function (id) { if (!alive.has(id)) state.selected.delete(id); });
-      state.loaded = true;
-      paintList();
+    var chain = fetchLibrary ? Twui.rpc("torrent_get", { fields: LIBRARY_FIELDS }) : Promise.resolve(null);
+    chain.then(function (list) {
+      if (generation !== pollGeneration) return null;
+      if (list) {
+        state.torrents = list.torrents || [];
+        state.torrents.forEach(applyLibraryTorrent);
+        var alive = new Set(state.torrents.map(function (torrent) { return torrent.id; }));
+        Array.from(state.selected).forEach(function (id) { if (!alive.has(id)) state.selected.delete(id); });
+        state.loaded = true;
+      }
       return Twui.rpc("session_stats", {});
     }).then(function (stats) {
+      if (generation !== pollGeneration || !stats) return null;
       state.stats = stats;
       state.reconnecting = false;
-      if (!labelsOnScreen()) return null;
+      if (state.view !== "torrents") return null;
       return Twui.rpc("torrent_get", { fields: ["id", "labels"] });
     }).then(function (labelled) {
+      if (generation !== pollGeneration) return null;
       if (labelled) {
         state.labels = new Map();
         (labelled.torrents || []).forEach(function (torrent) { state.labels.set(torrent.id, torrent.labels || []); });
@@ -449,15 +573,21 @@
       if (!detailWanted()) return null;
       return fetchDetail(onlyId());
     }).then(function (detail) {
+      if (generation !== pollGeneration) return;
       if (detail && detail.torrents && detail.torrents[0]) state.detail = detail.torrents[0];
       watchPending();
       paintLive();
     }, function (error) {
+      if (generation !== pollGeneration) return;
       if (error.info && error.info.locked) return lock();
       if (error.info && error.info.legacy) return failOld();
       state.reconnecting = true;
       paintBanner();
-    }).then(function () { state.inFlight = false; });
+    }).then(function () {
+      if (generation !== pollGeneration) return;
+      state.inFlight = false;
+      if (!fetchLibrary && state.view === "torrents" && state.mode === "live" && !document.hidden) tick();
+    });
   }
   function fetchDetail(id) {
     return Twui.rpc("torrent_get", { ids: [id], fields: DETAIL_FIELDS }).then(null, function (error) {
@@ -475,6 +605,7 @@
   function stopPoll() {
     if (pollTimer) clearInterval(pollTimer);
     pollTimer = null;
+    pollGeneration++;
     state.inFlight = false;
   }
 
@@ -558,8 +689,9 @@
     return head + rows.map(rowHtml).join("");
   }
 
-  function stat(label, value) {
-    return '<div><span class="muted">' + label + '</span><strong class="clip" data-full="' + esc(value) + '">' + esc(value) + '</strong></div>';
+  function stat(label, value, live) {
+    var liveAttr = live ? ' data-live-stat="' + live + '"' : "";
+    return '<div><span class="muted">' + label + '</span><strong class="clip" data-full="' + esc(value) + '"' + liveAttr + '>' + esc(value) + '</strong></div>';
   }
   function inspectorHtml(detail) {
     var name = detail.name || "";
@@ -599,12 +731,11 @@
     if (state.sequentialSupported && "sequential_download" in detail) controls += checkTorrent("sequential_download", "Download in order", detail.sequential_download);
     controls += '<button type="button" class="ghost" data-act="rename-torrent">Rename</button>';
     var fraction = shownFraction(detail);
-    var held = haveBytes(detail);
-    var haveLabel = Twui.formatBytes(held.total, state.units);
     var progress = '<div class="inspector-progress"><span class="' + barClass(detail) + '" data-live-progress><span style="width:' + progressWidth(fraction) + '"></span></span><span class="pct" data-live-percent>' + esc(progressText(fraction)) + '</span></div>';
-    var legend = '<p class="piece-key"><span><i class="piece-missing"></i>Not downloaded</span><span><i class="piece-unavailable"></i>Not available</span><span><i class="piece-active"></i>Downloading</span><span><i class="piece-have"></i>Downloaded</span></p>';
+    var legend = '<p class="piece-key"><span><i class="piece-missing"></i>Not downloaded</span><span><i class="piece-unavailable"></i>Not available</span><span><i class="piece-have"></i>Downloaded</span></p>';
     var pieces = detail.piece_count ? '<canvas class="pieces" aria-label="' + esc(pieceLabel(detail)) + '"></canvas>' + legend + '<p class="note" data-live-pieces>' + esc(pieceLabel(detail)) + '</p>' : "";
-    return progress + '<div class="stats">' + stat("Down", Twui.formatSpeed(detail.rate_download, state.units)) + stat("Up", Twui.formatSpeed(detail.rate_upload, state.units)) + stat("ETA", Twui.formatDuration(detail.eta)) + stat("Ratio", Twui.formatRatio(detail.upload_ratio)) + stat("Size", Twui.formatBytes(detail.size_when_done, state.units)) + stat("Have", haveLabel) + stat("Remaining", Twui.formatBytes(detail.left_until_done, state.units)) + stat("Downloaded", Twui.formatBytes(detail.downloaded_ever, state.units)) + stat("Uploaded", Twui.formatBytes(detail.uploaded_ever, state.units)) + stat("Location", detail.download_dir || "") + stat("Hash", detail.hash_string || "") + stat("Privacy", detail.is_private ? "Private" : "Public") + stat("Peers", Twui.formatCount(detail.peers_connected)) + stat("Queue", Twui.formatCount(detail.queue_position)) + "</div>" + (detail.status === 1 || detail.status === 2 ? '<p>Verifying ' + esc(Twui.formatPercent(detail.recheck_progress)) + '</p>' : "") + pieces + controls + (detail.comment ? '<p class="clip" data-full="' + esc(detail.comment) + '">' + esc(detail.comment) + '</p>' : "");
+    var live = inspectorStats(detail);
+    return progress + '<div class="stats">' + stat("Down", live.down, "down") + stat("Up", live.up, "up") + stat("ETA", live.eta, "eta") + stat("Ratio", live.ratio, "ratio") + stat("Size", live.size, "size") + stat("Have", live.have, "have") + stat("Remaining", live.remaining, "remaining") + stat("Downloaded", live.downloaded, "downloaded") + stat("Uploaded", live.uploaded, "uploaded") + stat("Location", live.location, "location") + stat("Hash", detail.hash_string || "") + stat("Privacy", detail.is_private ? "Private" : "Public") + stat("Peers", live.peers, "peers") + stat("Queue", live.queue, "queue") + "</div>" + (detail.status === 1 || detail.status === 2 ? '<p data-live-verify>Verifying ' + esc(Twui.formatPercent(detail.recheck_progress)) + '</p>' : "") + pieces + controls + (detail.comment ? '<p class="clip" data-full="' + esc(detail.comment) + '">' + esc(detail.comment) + '</p>' : "");
   }
   function checkTorrent(key, label, checked) {
     return '<label class="field check"><input type="checkbox" data-torrent="' + key + '"' + (checked ? " checked" : "") + (state.pendingKeys[key] ? " disabled" : "") + "> " + label + "</label>";
@@ -847,20 +978,38 @@
       scroll.setAttribute("aria-busy", state.loaded ? "false" : "true");
     }
     var inspector = document.getElementById("inspector");
-    if (showInspector() && state.selected.size > 1) inspector.innerHTML = summaryHtml();
+    if (showInspector() && state.selected.size > 1) {
+      inspector.innerHTML = summaryHtml();
+      delete inspector.dataset.detailId;
+      delete inspector.dataset.tab;
+      delete inspector.dataset.shape;
+    }
     else if (showInspector() && state.detail && state.detail.id === onlyId()) {
       var active = document.activeElement;
       var keep = inspector.contains(active) && active.matches("input, textarea, select");
-      if (!keep) {
+      if (keep || sameInspector(inspector, state.detail)) refreshInspectorLive(inspector, state.detail);
+      else {
         var body = inspector.querySelector(".inspector-body");
         var bodyTop = body ? body.scrollTop : 0;
         inspector.innerHTML = inspectorHtml(state.detail);
+        inspector.dataset.detailId = String(state.detail.id);
+        inspector.dataset.tab = state.tab;
+        inspector.dataset.shape = inspectorShape(state.detail);
         mountPieces(inspector, state.detail);
         var next = inspector.querySelector(".inspector-body");
         if (next) next.scrollTop = bodyTop;
-      } else refreshInspectorLive(inspector, state.detail);
-    } else if (showInspector()) inspector.innerHTML = '<div class="inspector-body"><p class="note">Reading torrent…</p></div>';
-    else inspector.innerHTML = "";
+      }
+    } else if (showInspector()) {
+      inspector.innerHTML = '<div class="inspector-body"><p class="note">Reading torrent…</p></div>';
+      delete inspector.dataset.detailId;
+      delete inspector.dataset.tab;
+      delete inspector.dataset.shape;
+    } else {
+      inspector.innerHTML = "";
+      delete inspector.dataset.detailId;
+      delete inspector.dataset.tab;
+      delete inspector.dataset.shape;
+    }
     paintFilters();
     paintCounts();
     paintSpeeds();
@@ -869,15 +1018,6 @@
     paintActionState();
     var main = document.querySelector(".workspace");
     if (main) main.setAttribute("aria-busy", state.loaded ? "false" : "true");
-  }
-  function paintList() {
-    if (state.view !== "torrents" || (showInspector() && !Twui.wide.matches)) return;
-    var scroll = document.getElementById("list-scroll");
-    if (!scroll) return;
-    var top = scroll.scrollTop;
-    scroll.innerHTML = listHtml();
-    scroll.scrollTop = top;
-    scroll.setAttribute("aria-busy", state.loaded ? "false" : "true");
   }
   function paintFilters() {
     var filters = document.querySelector(".filters");
@@ -1344,6 +1484,7 @@
       if (state.view === "settings" && !state.session) loadSession();
       state.detailOpen = false;
       paintLive();
+      if (state.view === "torrents") tick();
       return;
     }
     if (name === "filter") {
@@ -1351,6 +1492,7 @@
       state.view = "torrents";
       localStorage.setItem("twui.filter", state.filter);
       paintLive();
+      tick();
       return;
     }
     if (name === "sort") {
@@ -1737,6 +1879,6 @@
   Twui.fine = window.matchMedia("(hover: hover) and (pointer: fine)");
   Twui.wide.addEventListener("change", function () { if (state.mode === "live") paintLive(); });
 
-  if ("serviceWorker" in navigator) navigator.serviceWorker.register(location.origin + "/transmission/web/sw.js?v0.0.16").catch(function () {});
+  if ("serviceWorker" in navigator) navigator.serviceWorker.register(location.origin + "/transmission/web/sw.js?v0.0.19").catch(function () {});
   probe();
 })();
