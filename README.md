@@ -25,12 +25,12 @@ The behaviour of the page is written up in [Design/transmission-webui.md](Design
 
 ## Install
 
-[v1.0.0](https://github.com/schleising/transmission-webui/releases/tag/v1.0.0) is the first tagged release. Copy `Deployment/webui` from the tag you are installing, or from this repository when you want a later fix. The version in Settings is the version of the files you copied. 1.0.1 repeats the first RPC call with the browser cookies when a sign-in gate redirects the cookieless probe.
+[v1.0.1](https://github.com/schleising/transmission-webui/releases/tag/v1.0.1) is the release to install. Copy `Deployment/webui` from that tag into the daemon’s web home. It repeats the first RPC call with the browser cookies when a sign-in gate redirects the cookieless probe.
 
 ```bash
 git clone https://github.com/schleising/transmission-webui.git
 cd transmission-webui
-git checkout v1.0.0
+git checkout v1.0.1
 ```
 
 Copy the contents of `Deployment/webui` into the directory Transmission is using as `TRANSMISSION_WEB_HOME`. The copy must include the empty `default.json` in that directory. Leave it empty. It stops Transmission reporting a missing `default.json` at startup.
