@@ -66,9 +66,8 @@ button:disabled, input:disabled, textarea:disabled, select:disabled { cursor: de
   border-right: 1px solid var(--line);
   padding: 16px 12px 12px;
 }
-.workspace { background: #fff; }
+.workspace, .inspector { background: #fff; }
 .inspector {
-  background: var(--surface);
   border-left: 1px solid var(--line);
   display: none;
 }
@@ -205,6 +204,7 @@ textarea { min-height: 120px; resize: vertical; }
 .head-main button { width: auto; }
 .head-row button.left { text-align: left; }
 html[style*="color-scheme: dark"] .workspace,
+html[style*="color-scheme: dark"] .inspector,
 html[style*="color-scheme: dark"] .head-row { background: var(--bg); }
 .num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .row {
@@ -302,7 +302,7 @@ canvas.pieces { display: block; width: 100%; height: auto; margin: 8px 0 4px; im
   column-gap: 12px;
   align-items: center;
 }
-.peer-grid > span { min-width: 0; padding: 8px 0; border-bottom: 1px solid var(--line); }
+.peer-grid > span { min-width: 0; padding: 8px 0; border-bottom: 1px solid var(--line); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .peer-head { color: var(--muted); font-size: 12px; }
 .file, .peer, .tracker { padding: 8px 0; border-bottom: 1px solid var(--line); min-width: 0; }
 .swatches { display: flex; flex-wrap: wrap; gap: 8px; }
@@ -422,7 +422,11 @@ canvas.pieces { display: block; width: 100%; height: auto; margin: 8px 0 4px; im
   .selecting .check-col { display: grid; place-items: center; }
   .selecting .card-body { min-width: 0; }
   .selecting .progress-cell { grid-column: 1 / -1; }
-  .num { display: none; }
+  .row > .num { display: none; }
+  .peer-grid {
+    grid-template-columns: minmax(0, 1.3fr) minmax(0, 0.9fr) 3.4rem 4.6rem 4.6rem;
+    column-gap: 8px;
+  }
   .progress-cell { width: 100%; }
   .card-meta {
     display: flex;
