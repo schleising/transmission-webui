@@ -167,15 +167,83 @@
     var bits = String(value || "0:0").split(":");
     return (parseInt(bits[0], 10) || 0) * 60 + (parseInt(bits[1], 10) || 0);
   }
-  function pieceCells(detail) {
-    if (!detail.pieces || !detail.piece_count || detail.piece_count > 2000) return "";
-    var bin = atob(detail.pieces);
-    var html = '<div class="pieces" aria-hidden="true">';
-    for (var i = 0; i < detail.piece_count; i++) {
-      var on = (bin.charCodeAt(i >> 3) & (128 >> (i & 7))) !== 0;
-      html += "<i" + (on ? ' class="on"' : "") + "></i>";
+  function pieceBits(detail) {
+    var count = detail && detail.piece_count;
+    if (!count || !detail.pieces) return null;
+    var bin;
+    try { bin = atob(detail.pieces); } catch (e) { return null; }
+    var have = 0;
+    for (var i = 0; i < count; i++) {
+      if (bin.charCodeAt(i >> 3) & (128 >> (i & 7))) have++;
     }
-    return html + "</div>";
+    return { bin: bin, count: count, have: have };
+  }
+  function shownFraction(torrent) {
+    var reported = Number(torrent && torrent.percent_done);
+    if (!Number.isFinite(reported) || reported < 0) reported = 0;
+    var bits = torrent && torrent.pieces ? pieceBits(torrent) : null;
+    var fromPieces = bits ? bits.have / bits.count : 0;
+    return Math.min(1, Math.max(reported, fromPieces));
+  }
+  function progressWidth(fraction) {
+    return Math.max(0, Math.min(100, Number(fraction) * 100)).toFixed(2) + "%";
+  }
+  function pieceLabel(detail) {
+    var bits = pieceBits(detail);
+    if (!bits) return "";
+    return Twui.formatCount(bits.have) + " of " + Twui.formatCount(bits.count) + " pieces";
+  }
+  function drawPieces(canvas, detail) {
+    var bits = pieceBits(detail);
+    if (!canvas || !bits) return;
+    var width = canvas.parentElement ? canvas.parentElement.clientWidth : 0;
+    if (width < 40) width = 320;
+    var cell = bits.count > 8000 ? 2 : bits.count > 2000 ? 3 : 6;
+    var cols = Math.max(1, Math.floor(width / cell));
+    var rows = Math.ceil(bits.count / cols);
+    var dpr = Math.min(window.devicePixelRatio || 1, 2);
+    canvas.width = Math.floor(cols * cell * dpr);
+    canvas.height = Math.floor(rows * cell * dpr);
+    canvas.style.height = (rows * cell) + "px";
+    var ctx = canvas.getContext("2d");
+    var styles = getComputedStyle(document.documentElement);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.fillStyle = styles.getPropertyValue("--track").trim() || "#d7e6e3";
+    ctx.fillRect(0, 0, cols * cell, rows * cell);
+    ctx.fillStyle = styles.getPropertyValue("--accent").trim() || "#14756f";
+    var gap = cell > 2 ? 1 : 0;
+    for (var i = 0; i < bits.count; i++) {
+      if ((bits.bin.charCodeAt(i >> 3) & (128 >> (i & 7))) === 0) continue;
+      ctx.fillRect((i % cols) * cell, Math.floor(i / cols) * cell, cell - gap, cell - gap);
+    }
+  }
+  function mountPieces(root, detail) {
+    if (!root) return;
+    var canvas = root.querySelector("canvas.pieces");
+    if (canvas) drawPieces(canvas, detail);
+  }
+  function refreshInspectorLive(inspector, detail) {
+    if (!inspector || !detail) return;
+    var fraction = shownFraction(detail);
+    inspector.querySelectorAll("[data-live-progress] > span").forEach(function (fill) {
+      fill.style.width = progressWidth(fraction);
+    });
+    inspector.querySelectorAll("[data-live-percent]").forEach(function (node) {
+      node.textContent = Twui.formatPercent(fraction);
+    });
+    inspector.querySelectorAll("[data-live-pieces]").forEach(function (node) {
+      node.textContent = pieceLabel(detail);
+    });
+    mountPieces(inspector, detail);
+    var files = detail.files || [];
+    var stats = detail.file_stats || [];
+    inspector.querySelectorAll("[data-file-done]").forEach(function (node) {
+      var index = Number(node.dataset.fileDone);
+      var info = stats[index] || {};
+      var file = files[index] || {};
+      var done = info.bytes_completed != null ? info.bytes_completed : file.bytes_completed;
+      node.textContent = Twui.formatBytes(done, state.units) + " of " + Twui.formatBytes(file.length, state.units);
+    });
   }
 
   function failAuthOff() {
@@ -283,6 +351,7 @@
       var alive = new Set(state.torrents.map(function (torrent) { return torrent.id; }));
       Array.from(state.selected).forEach(function (id) { if (!alive.has(id)) state.selected.delete(id); });
       state.loaded = true;
+      paintList();
       return Twui.rpc("session_stats", {});
     }).then(function (stats) {
       state.stats = stats;
@@ -380,9 +449,9 @@
   }
   function rowHtml(torrent) {
     var selected = state.selected.has(torrent.id);
-    var pct = Math.max(0, Math.min(100, Math.round((torrent.percent_done || 0) * 100)));
+    var fraction = state.detail && state.detail.id === torrent.id ? shownFraction(state.detail) : shownFraction(torrent);
     var check = '<span class="check-col"><input type="checkbox" data-check="' + torrent.id + '"' + (selected ? " checked" : "") + ' aria-label="Select ' + esc(torrent.name) + '"></span>';
-    return '<div class="row' + (selected ? " selected" : "") + '" data-id="' + torrent.id + '" role="row" aria-selected="' + selected + '">' + check + '<div class="card-body"><div class="name clip" data-full="' + esc(torrent.name) + '">' + esc(torrent.name) + '</div><div class="sub clip' + (torrent.error_string ? " error" : "") + '" data-full="' + esc(subText(torrent)) + '">' + esc(subText(torrent)) + '</div><div class="card-meta"><span>Size <b>' + esc(Twui.formatBytes(torrent.total_size, state.units)) + '</b></span><span>Down <b>' + esc(Twui.formatSpeed(torrent.rate_download, state.units)) + '</b></span><span>Up <b>' + esc(Twui.formatSpeed(torrent.rate_upload, state.units)) + '</b></span><span>ETA <b>' + esc(Twui.formatDuration(torrent.eta)) + '</b></span><span>Ratio <b>' + esc(Twui.formatRatio(torrent.upload_ratio)) + '</b></span></div></div><div class="progress-cell"><span class="' + barClass(torrent) + '"><span style="width:' + pct + '%"></span></span><span class="pct">' + esc(Twui.formatPercent(torrent.percent_done)) + '</span></div><div class="num">' + esc(Twui.formatBytes(torrent.total_size, state.units)) + '</div><div class="num">' + esc(Twui.formatSpeed(torrent.rate_download, state.units)) + '</div><div class="num">' + esc(Twui.formatSpeed(torrent.rate_upload, state.units)) + '</div><div class="num">' + esc(Twui.formatDuration(torrent.eta)) + '</div><div class="num">' + esc(Twui.formatRatio(torrent.upload_ratio)) + '</div></div>';
+    return '<div class="row' + (selected ? " selected" : "") + '" data-id="' + torrent.id + '" role="row" aria-selected="' + selected + '">' + check + '<div class="card-body"><div class="name clip" data-full="' + esc(torrent.name) + '">' + esc(torrent.name) + '</div><div class="sub clip' + (torrent.error_string ? " error" : "") + '" data-full="' + esc(subText(torrent)) + '">' + esc(subText(torrent)) + '</div><div class="card-meta"><span>Size <b>' + esc(Twui.formatBytes(torrent.total_size, state.units)) + '</b></span><span>Down <b>' + esc(Twui.formatSpeed(torrent.rate_download, state.units)) + '</b></span><span>Up <b>' + esc(Twui.formatSpeed(torrent.rate_upload, state.units)) + '</b></span><span>ETA <b>' + esc(Twui.formatDuration(torrent.eta)) + '</b></span><span>Ratio <b>' + esc(Twui.formatRatio(torrent.upload_ratio)) + '</b></span></div></div><div class="progress-cell"><span class="' + barClass(torrent) + '" data-live-progress><span style="width:' + progressWidth(fraction) + '"></span></span><span class="pct" data-live-percent>' + esc(Twui.formatPercent(fraction)) + '</span></div><div class="num">' + esc(Twui.formatBytes(torrent.total_size, state.units)) + '</div><div class="num">' + esc(Twui.formatSpeed(torrent.rate_download, state.units)) + '</div><div class="num">' + esc(Twui.formatSpeed(torrent.rate_upload, state.units)) + '</div><div class="num">' + esc(Twui.formatDuration(torrent.eta)) + '</div><div class="num">' + esc(Twui.formatRatio(torrent.upload_ratio)) + '</div></div>';
   }
   function listHtml() {
     if (!state.loaded) {
@@ -407,7 +476,7 @@
     var tabs = ["overview", "files", "peers", "trackers"].map(function (tab) {
       return '<button type="button" class="tab' + (state.tab === tab ? " active" : "") + '" data-act="tab" data-tab="' + tab + '">' + tab.charAt(0).toUpperCase() + tab.slice(1) + '</button>';
     }).join("");
-    return '<div class="inspector-head"><button type="button" class="ghost" data-act="back">Back</button><h2 class="clip" data-full="' + esc(name) + '">' + esc(name) + '</h2><button type="button" class="ghost inspector-close" data-act="close-inspector">Close</button></div><div class="inspector-actions"><button type="button" class="ghost" data-act="start">Start</button><button type="button" class="ghost" data-act="stop">Stop</button><button type="button" class="ghost" data-act="verify">Verify</button><button type="button" class="ghost" data-act="remove">Remove</button><button type="button" class="ghost" data-act="more">More</button></div><div class="tabs" role="tablist">' + tabs + '</div><div class="inspector-body">' + inspectorBody(detail) + '</div>';
+    return '<div class="inspector-head"><button type="button" class="ghost" data-act="back">Back</button><h2 class="clip" data-full="' + esc(name) + '">' + esc(name) + '</h2><button type="button" class="icon-btn inspector-close" data-act="close-inspector" aria-label="Close"><svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M4 4l8 8M12 4l-8 8" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></button></div><div class="inspector-actions"><button type="button" class="ghost" data-act="start">Start</button><button type="button" class="ghost" data-act="stop">Stop</button><button type="button" class="ghost" data-act="verify">Verify</button><button type="button" class="ghost" data-act="remove">Remove</button><button type="button" class="ghost" data-act="more">More</button></div><div class="tabs" role="tablist">' + tabs + '</div><div class="inspector-body">' + inspectorBody(detail) + '</div>';
   }
   function inspectorBody(detail) {
     if (state.tab === "files") return filesHtml(detail);
@@ -439,7 +508,10 @@
     }
     if (state.sequentialSupported && "sequential_download" in detail) controls += checkTorrent("sequential_download", "Download in order", detail.sequential_download);
     controls += '<button type="button" class="ghost" data-act="rename-torrent">Rename</button>';
-    return '<div class="stats">' + stat("Down", Twui.formatSpeed(detail.rate_download, state.units)) + stat("Up", Twui.formatSpeed(detail.rate_upload, state.units)) + stat("ETA", Twui.formatDuration(detail.eta)) + stat("Ratio", Twui.formatRatio(detail.upload_ratio)) + stat("Size", Twui.formatBytes(detail.total_size, state.units)) + stat("Downloaded", Twui.formatBytes(detail.downloaded_ever, state.units)) + stat("Uploaded", Twui.formatBytes(detail.uploaded_ever, state.units)) + stat("Remaining", Twui.formatBytes(detail.left_until_done, state.units)) + stat("Location", detail.download_dir || "") + stat("Hash", detail.hash_string || "") + stat("Privacy", detail.is_private ? "Private" : "Public") + stat("Peers", Twui.formatCount(detail.peers_connected)) + stat("Queue", Twui.formatCount(detail.queue_position)) + "</div>" + (detail.status === 1 || detail.status === 2 ? '<p>Verifying ' + esc(Twui.formatPercent(detail.recheck_progress)) + '</p>' : "") + pieceCells(detail) + controls + (detail.comment ? '<p class="clip" data-full="' + esc(detail.comment) + '">' + esc(detail.comment) + '</p>' : "");
+    var fraction = shownFraction(detail);
+    var progress = '<div class="inspector-progress"><span class="bar" data-live-progress><span style="width:' + progressWidth(fraction) + '"></span></span><span class="pct" data-live-percent>' + esc(Twui.formatPercent(fraction)) + '</span></div>';
+    var pieces = detail.piece_count ? '<canvas class="pieces" aria-label="' + esc(pieceLabel(detail)) + '"></canvas><p class="note" data-live-pieces>' + esc(pieceLabel(detail)) + '</p>' : "";
+    return progress + '<div class="stats">' + stat("Down", Twui.formatSpeed(detail.rate_download, state.units)) + stat("Up", Twui.formatSpeed(detail.rate_upload, state.units)) + stat("ETA", Twui.formatDuration(detail.eta)) + stat("Ratio", Twui.formatRatio(detail.upload_ratio)) + stat("Size", Twui.formatBytes(detail.total_size, state.units)) + stat("Downloaded", Twui.formatBytes(detail.downloaded_ever, state.units)) + stat("Uploaded", Twui.formatBytes(detail.uploaded_ever, state.units)) + stat("Remaining", Twui.formatBytes(detail.left_until_done, state.units)) + stat("Location", detail.download_dir || "") + stat("Hash", detail.hash_string || "") + stat("Privacy", detail.is_private ? "Private" : "Public") + stat("Peers", Twui.formatCount(detail.peers_connected)) + stat("Queue", Twui.formatCount(detail.queue_position)) + "</div>" + (detail.status === 1 || detail.status === 2 ? '<p>Verifying ' + esc(Twui.formatPercent(detail.recheck_progress)) + '</p>' : "") + pieces + controls + (detail.comment ? '<p class="clip" data-full="' + esc(detail.comment) + '">' + esc(detail.comment) + '</p>' : "");
   }
   function checkTorrent(key, label, checked) {
     return '<label class="field check"><input type="checkbox" data-torrent="' + key + '"' + (checked ? " checked" : "") + (state.pendingKeys[key] ? " disabled" : "") + "> " + label + "</label>";
@@ -454,7 +526,7 @@
       var priority = "priority" in info ? info.priority : (detail.priorities || [])[index];
       var done = info.bytes_completed != null ? info.bytes_completed : file.bytes_completed;
       var disabled = state.pendingKeys["file-" + index] ? " disabled" : "";
-      return '<div class="file"><div class="clip" data-full="' + esc(file.name) + '">' + esc(file.name) + '</div><div class="muted">' + esc(Twui.formatBytes(done, state.units)) + " of " + esc(Twui.formatBytes(file.length, state.units)) + '</div><label class="check"><input type="checkbox" data-file="' + index + '"' + (wanted ? " checked" : "") + disabled + '> Download</label><label class="field">Priority<select data-priority="' + index + '"><option value="-1"' + (priority === -1 ? " selected" : "") + '>Low</option><option value="0"' + (priority === 0 ? " selected" : "") + '>Normal</option><option value="1"' + (priority === 1 ? " selected" : "") + '>High</option></select></label><button type="button" class="ghost" data-act="rename-file" data-path="' + esc(file.name) + '">Rename</button></div>';
+      return '<div class="file"><div class="clip" data-full="' + esc(file.name) + '">' + esc(file.name) + '</div><div class="muted" data-file-done="' + index + '">' + esc(Twui.formatBytes(done, state.units)) + " of " + esc(Twui.formatBytes(file.length, state.units)) + '</div><label class="check"><input type="checkbox" data-file="' + index + '"' + (wanted ? " checked" : "") + disabled + '> Download</label><label class="field">Priority<select data-priority="' + index + '"><option value="-1"' + (priority === -1 ? " selected" : "") + '>Low</option><option value="0"' + (priority === 0 ? " selected" : "") + '>Normal</option><option value="1"' + (priority === 1 ? " selected" : "") + '>High</option></select></label><button type="button" class="ghost" data-act="rename-file" data-path="' + esc(file.name) + '">Rename</button></div>';
     }).join("");
   }
   function peersHtml(detail) {
@@ -463,11 +535,17 @@
       return item[0] + " " + Twui.formatCount(item[1] || 0);
     }).join(" · ");
     var peers = detail.peers || [];
-    if (!peers.length) return "<p>No peers are connected.</p><p class='note'>" + esc(breakdown) + "</p>";
-    return "<p class='note'>" + esc(breakdown) + "</p>" + peers.map(function (peer) {
-      var who = (peer.address || "") + (peer.client_name ? " · " + peer.client_name : "");
-      return '<div class="peer"><div class="clip" data-full="' + esc(who) + '">' + esc(who) + '</div><div class="muted">' + esc(Twui.formatPercent(peer.progress)) + " · down " + esc(Twui.formatSpeed(peer.rate_to_client, state.units)) + " · up " + esc(Twui.formatSpeed(peer.rate_to_peer, state.units)) + (peer.is_encrypted ? " · encrypted" : "") + "</div></div>";
+    var note = "<p class='note'>" + esc(breakdown) + "</p>";
+    if (!peers.length) return "<p>No peers are connected.</p>" + note;
+    var head = [["Address", ""], ["Client", ""], ["Progress", " num"], ["Down", " num"], ["Up", " num"]].map(function (column) {
+      return '<span class="peer-head' + column[1] + '">' + column[0] + "</span>";
     }).join("");
+    var rows = peers.map(function (peer) {
+      var address = peer.address || "";
+      var full = address + (peer.is_encrypted ? " · encrypted" : "");
+      return '<span class="clip" data-full="' + esc(full) + '">' + esc(address) + '</span><span class="clip" data-full="' + esc(peer.client_name || "") + '">' + esc(peer.client_name || "") + '</span><span class="num">' + esc(Twui.formatPercent(peer.progress)) + '</span><span class="num">' + esc(Twui.formatSpeed(peer.rate_to_client, state.units)) + '</span><span class="num">' + esc(Twui.formatSpeed(peer.rate_to_peer, state.units)) + "</span>";
+    }).join("");
+    return note + '<div class="peer-grid">' + head + rows + "</div>";
   }
   function trackersHtml(detail) {
     var list = detail.tracker_stats || [];
@@ -490,7 +568,7 @@
       down += torrent.rate_download || 0;
       up += torrent.rate_upload || 0;
     });
-    return '<div class="inspector-head"><h2>' + Twui.formatCount(ids.length) + ' torrents</h2><button type="button" class="ghost inspector-close" data-act="close-inspector">Close</button></div><div class="inspector-actions"><button type="button" class="ghost" data-act="start">Start</button><button type="button" class="ghost" data-act="stop">Stop</button><button type="button" class="ghost" data-act="verify">Verify</button><button type="button" class="ghost" data-act="remove">Remove</button><button type="button" class="ghost" data-act="more">More</button></div><div class="inspector-body"><div class="stats">' + stat("Size", Twui.formatBytes(size, state.units)) + stat("Down", Twui.formatSpeed(down, state.units)) + stat("Up", Twui.formatSpeed(up, state.units)) + "</div><p class='note'>Files and peers are shown when one torrent is selected.</p></div>";
+    return '<div class="inspector-head"><h2>' + Twui.formatCount(ids.length) + ' torrents</h2><button type="button" class="icon-btn inspector-close" data-act="close-inspector" aria-label="Close"><svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M4 4l8 8M12 4l-8 8" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></button></div><div class="inspector-actions"><button type="button" class="ghost" data-act="start">Start</button><button type="button" class="ghost" data-act="stop">Stop</button><button type="button" class="ghost" data-act="verify">Verify</button><button type="button" class="ghost" data-act="remove">Remove</button><button type="button" class="ghost" data-act="more">More</button></div><div class="inspector-body"><div class="stats">' + stat("Size", Twui.formatBytes(size, state.units)) + stat("Down", Twui.formatSpeed(down, state.units)) + stat("Up", Twui.formatSpeed(up, state.units)) + "</div><p class='note'>Files and peers are shown when one torrent is selected.</p></div>";
   }
 
   function activityHtml() {
@@ -684,9 +762,10 @@
         var body = inspector.querySelector(".inspector-body");
         var bodyTop = body ? body.scrollTop : 0;
         inspector.innerHTML = inspectorHtml(state.detail);
+        mountPieces(inspector, state.detail);
         var next = inspector.querySelector(".inspector-body");
         if (next) next.scrollTop = bodyTop;
-      }
+      } else refreshInspectorLive(inspector, state.detail);
     } else if (showInspector()) inspector.innerHTML = '<div class="inspector-body"><p class="note">Reading torrent…</p></div>';
     else inspector.innerHTML = "";
     paintFilters();
@@ -696,6 +775,15 @@
     paintActionState();
     var main = document.querySelector(".workspace");
     if (main) main.setAttribute("aria-busy", state.loaded ? "false" : "true");
+  }
+  function paintList() {
+    if (state.view !== "torrents" || (showInspector() && !Twui.wide.matches)) return;
+    var scroll = document.getElementById("list-scroll");
+    if (!scroll) return;
+    var top = scroll.scrollTop;
+    scroll.innerHTML = listHtml();
+    scroll.scrollTop = top;
+    scroll.setAttribute("aria-busy", state.loaded ? "false" : "true");
   }
   function paintFilters() {
     var filters = document.querySelector(".filters");
@@ -1008,9 +1096,10 @@
     openDialog('<h2>Rename</h2><label class="field">Name<input id="rename-name" type="text" value="' + esc(current) + '"></label><div class="dialog-actions"><button type="button" class="ghost" data-act="close">Cancel</button><button type="button" class="primary" data-act="rename-save" data-id="' + id + '" data-path="' + esc(path) + '">Rename</button></div>', "#rename-name");
   }
   function menuHtml() {
-    var items = [["start", "Start"], ["stop", "Stop"], ["start-now", "Start now"], ["verify", "Verify"], ["reannounce", "Reannounce"], ["queue-top", "Move to top"], ["queue-up", "Move up"], ["queue-down", "Move down"], ["queue-bottom", "Move to bottom"], ["location", "Set location"], ["remove", "Remove"]];
+    var single = state.menuIds && state.menuIds.length === 1;
+    var items = [["start", "Start"], ["stop", "Stop"], ["start-now", "Start now"], ["verify", "Verify"], ["reannounce", "Reannounce"], ["rename-torrent", "Rename"], ["location", "Set location"], ["queue-top", "Move to top"], ["queue-up", "Move up"], ["queue-down", "Move down"], ["queue-bottom", "Move to bottom"], ["remove", "Remove"]];
     return items.map(function (item) {
-      var disabled = state.pendingAction === item[0] ? " disabled" : "";
+      var disabled = state.pendingAction === item[0] || (item[0] === "rename-torrent" && !single) ? " disabled" : "";
       return '<button type="button" role="menuitem" data-act="' + item[0] + '"' + disabled + ">" + item[1] + "</button>";
     }).join("");
   }
@@ -1223,8 +1312,11 @@
       return;
     }
     if (name === "rename-torrent") {
-      var detail = state.detail;
-      if (detail) renameDialog(detail.id, detail.name || "");
+      var renameIds = currentIds();
+      closeMenu();
+      if (renameIds.length !== 1) return;
+      var torrent = byId(renameIds[0]) || state.detail;
+      if (torrent) renameDialog(renameIds[0], torrent.name || "");
       return;
     }
     if (name === "rename-file") return renameDialog(onlyId(), act.dataset.path || "");
@@ -1536,6 +1628,6 @@
   Twui.fine = window.matchMedia("(hover: hover) and (pointer: fine)");
   Twui.wide.addEventListener("change", function () { if (state.mode === "live") paintLive(); });
 
-  if ("serviceWorker" in navigator) navigator.serviceWorker.register(location.origin + "/transmission/web/sw.js?v0.0.1").catch(function () {});
+  if ("serviceWorker" in navigator) navigator.serviceWorker.register(location.origin + "/transmission/web/sw.js?v0.0.2").catch(function () {});
   probe();
 })();

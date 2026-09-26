@@ -1,18 +1,18 @@
-var VERSION = "0.0.1";
+var VERSION = "0.0.2";
 var CACHE = "twui-" + VERSION;
 var SHELL = [
   "/transmission/web/",
-  "/transmission/web/index.html?v0.0.1",
-  "/transmission/web/app.css?v0.0.1",
-  "/transmission/web/boot.js?v0.0.1",
-  "/transmission/web/format.js?v0.0.1",
-  "/transmission/web/rpc.js?v0.0.1",
-  "/transmission/web/app.js?v0.0.1",
-  "/transmission/web/manifest.webmanifest?v0.0.1",
-  "/transmission/web/icons/favicon.svg?v0.0.1",
-  "/transmission/web/icons/icon-192.png?v0.0.1",
-  "/transmission/web/icons/icon-512.png?v0.0.1",
-  "/transmission/web/icons/icon-maskable-512.png?v0.0.1"
+  "/transmission/web/index.html?v0.0.2",
+  "/transmission/web/app.css?v0.0.2",
+  "/transmission/web/boot.js?v0.0.2",
+  "/transmission/web/format.js?v0.0.2",
+  "/transmission/web/rpc.js?v0.0.2",
+  "/transmission/web/app.js?v0.0.2",
+  "/transmission/web/manifest.webmanifest?v0.0.2",
+  "/transmission/web/icons/favicon.svg?v0.0.2",
+  "/transmission/web/icons/icon-192.png?v0.0.2",
+  "/transmission/web/icons/icon-512.png?v0.0.2",
+  "/transmission/web/icons/icon-maskable-512.png?v0.0.2"
 ];
 
 self.addEventListener("install", function (event) {

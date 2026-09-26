@@ -228,6 +228,9 @@ textarea { min-height: 120px; resize: vertical; }
 .bar.stopped > span { background: var(--muted-fill); }
 .bar.error > span { background: var(--emphasis); }
 .pct { color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+.inspector-progress { display: flex; align-items: center; gap: 10px; margin: 4px 0 12px; }
+.inspector-progress .bar { flex: 1; margin: 0; }
+.inspector-progress .pct { flex: none; }
 
 .skeleton {
   height: 14px;
@@ -245,6 +248,19 @@ textarea { min-height: 120px; resize: vertical; }
 .inspector-head { display: flex; align-items: center; gap: 8px; }
 .inspector-head h2 { flex: 1; min-width: 0; margin: 0; }
 .inspector-close { display: none; }
+.icon-btn {
+  width: 36px;
+  height: 36px;
+  min-height: 36px;
+  border: 0;
+  background: transparent;
+  border-radius: 8px;
+  padding: 0;
+  flex: none;
+  place-items: center;
+  color: var(--muted);
+}
+.icon-btn:hover, .icon-btn:focus-visible { background: var(--soft); color: var(--text); }
 .inspector-actions, .dialog-actions, .toolbar-actions { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }
 .inspector-actions { justify-content: flex-start; }
 .tabs { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px; padding-bottom: 8px; }
@@ -257,9 +273,15 @@ textarea { min-height: 120px; resize: vertical; }
 .field { display: flex; flex-direction: column; gap: 6px; margin: 12px 0; min-width: 0; }
 .field.rowish, .check { flex-direction: row; align-items: center; gap: 8px; min-height: 44px; }
 .check input { width: auto; min-height: 0; }
-.pieces { display: grid; grid-template-columns: repeat(auto-fill, minmax(8px, 1fr)); gap: 2px; margin: 8px 0 16px; }
-.pieces i { display: block; height: 8px; background: var(--track); }
-.pieces i.on { background: var(--accent); }
+canvas.pieces { display: block; width: 100%; height: auto; margin: 8px 0 4px; image-rendering: pixelated; }
+.peer-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr) 4.6rem 5.2rem 5.2rem;
+  column-gap: 12px;
+  align-items: center;
+}
+.peer-grid > span { min-width: 0; padding: 8px 0; border-bottom: 1px solid var(--line); }
+.peer-head { color: var(--muted); font-size: 12px; }
 .file, .peer, .tracker { padding: 8px 0; border-bottom: 1px solid var(--line); min-width: 0; }
 .swatches { display: flex; flex-wrap: wrap; gap: 8px; }
 .swatch { width: 44px; height: 44px; border-radius: 8px; border: 2px solid transparent; padding: 0; }
@@ -279,7 +301,7 @@ textarea { min-height: 120px; resize: vertical; }
   box-shadow: 0 8px 28px oklch(0.2 0.02 190 / 0.16);
   max-width: min(320px, calc(100vw - 16px));
 }
-.menu { display: flex; flex-direction: column; padding: 6px; max-height: min(70dvh, 420px); overflow: auto; overscroll-behavior: contain; }
+.menu { display: flex; flex-direction: column; padding: 6px; max-height: calc(100dvh - 16px); overflow: auto; overscroll-behavior: contain; }
 .menu button { min-height: 44px; border: 0; background: transparent; border-radius: 8px; text-align: left; padding: 0 10px; }
 .menu button:hover, .menu button:focus-visible { background: var(--soft); }
 .tip { padding: 8px 10px; max-height: 40dvh; overflow: auto; overscroll-behavior: contain; overflow-wrap: anywhere; white-space: pre-wrap; }
@@ -314,7 +336,7 @@ textarea { min-height: 120px; resize: vertical; }
 
 @media (min-width: 1100px) {
   [data-act="select-mode"], [data-act="back"] { display: none; }
-  .inspector-close { display: inline-flex; }
+  .inspector-close { display: grid; }
 }
 @media (max-width: 1099px) {
   .shell, .shell.has-inspector { display: flex; flex-direction: column; grid-template-columns: none; }
@@ -355,7 +377,8 @@ textarea { min-height: 120px; resize: vertical; }
   .selecting .row { flex-direction: row; align-items: center; }
   .selecting .check-col { display: grid; place-items: center; flex: none; }
   .selecting .card-body { flex: 1; min-width: 0; }
-  .num, .progress-cell { display: none; }
+  .num { display: none; }
+  .progress-cell { display: block; }
   .card-meta {
     display: flex;
     gap: 10px;
