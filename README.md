@@ -2,7 +2,7 @@
 
 A browser interface for a [Transmission](https://transmissionbt.com/) daemon. It is a static page: it has no server of its own, and the only password is the one that daemon already requires. Transmission 4.1 or newer serves the page from `TRANSMISSION_WEB_HOME` and answers JSON-RPC 2.0 at `/transmission/rpc`.
 
-The interface version is 1.0.0. Settings shows that version, and the daemon version once the session has been read. Copy on screen uses British spelling. RPC names stay as Transmission spells them.
+The interface version is 1.0.1. Settings shows that version, and the daemon version once the session has been read. Copy on screen uses British spelling. RPC names stay as Transmission spells them.
 
 The behaviour of the page is written up in [Design/transmission-webui.md](Design/transmission-webui.md). The pictures in that folder are earlier mockups.
 
@@ -25,7 +25,7 @@ The behaviour of the page is written up in [Design/transmission-webui.md](Design
 
 ## Install
 
-Release [v1.0.0](https://github.com/schleising/transmission-webui/releases/tag/v1.0.0) is the tree to install. Its `Deployment/webui` directory is what you copy into the daemon’s web home.
+[v1.0.0](https://github.com/schleising/transmission-webui/releases/tag/v1.0.0) is the first tagged release. Copy `Deployment/webui` from the tag you are installing, or from this repository when you want a later fix. The version in Settings is the version of the files you copied. 1.0.1 repeats the first RPC call with the browser cookies when a sign-in gate redirects the cookieless probe.
 
 ```bash
 git clone https://github.com/schleising/transmission-webui.git

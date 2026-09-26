@@ -1879,6 +1879,6 @@
   Twui.fine = window.matchMedia("(hover: hover) and (pointer: fine)");
   Twui.wide.addEventListener("change", function () { if (state.mode === "live") paintLive(); });
 
-  if ("serviceWorker" in navigator) navigator.serviceWorker.register(location.origin + "/transmission/web/sw.js?v1.0.0").catch(function () {});
+  if ("serviceWorker" in navigator) navigator.serviceWorker.register(location.origin + "/transmission/web/sw.js?v1.0.1").catch(function () {});
   probe();
 })();

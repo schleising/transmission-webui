@@ -86,7 +86,7 @@ The client calls the absolute path `/transmission/rpc`. From a page at `/transmi
 
 ### Interface version
 
-The interface version is `1.0.0`. Settings shows it as “Interface 1.0.0”, and adds the daemon version when `session_get` has returned one. The same string is the cache-busting query on every static file: `app.css?v1.0.0`, `app.js?v1.0.0`, `manifest.webmanifest?v1.0.0`, icon URLs, and `sw.js?v1.0.0`. The HTML links use that query. Raising the version changes every URL, and the service worker drops the previous cache when it activates. The `v1.0.0` tag on the repository is this release.
+The interface version is `1.0.1`. Settings shows it as “Interface 1.0.1”, and adds the daemon version when `session_get` has returned one. The same string is the cache-busting query on every static file: `app.css?v1.0.1`, `app.js?v1.0.1`, `manifest.webmanifest?v1.0.1`, icon URLs, and `sw.js?v1.0.1`. The HTML links use that query. Raising the version changes every URL, and the service worker drops the previous cache when it activates. The `v1.0.0` tag was the first release. Later fixes, including the cookieless-probe redirect, are in the repository after that tag.
 
 `Deployment/webui` also contains an empty `default.json`. Leave that file in the web home. It is there so Transmission does not report a missing `default.json` when it starts.
 
@@ -157,6 +157,7 @@ On load, before any torrent data is drawn, the client probes `session_get` with 
 | First probe, credentials omitted | What the page does |
 |---|---|
 | `401`, including after the `409` retry | Authentication is on. Keep the session id. Send `session_get` again with `credentials: 'same-origin'`. |
+| Redirect (`301`–`308`, or an opaque redirect) | A gate in front of the daemon, such as nginx `auth_request`, refused the cookieless probe and sent the browser to a sign-in page. Treat it as `401` and repeat `session_get` with `credentials: 'same-origin'`, so the website session cookie is sent. Do not follow that redirect. |
 | `200` with a `result` object | Authentication is off. Show a blocking explanation: turn on RPC authentication in Transmission, then reload. Do not draw the library. |
 | Network error or HTTP 5xx | Show “Transmission did not respond” and a way to try the probe again. |
 

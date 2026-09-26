@@ -38,10 +38,14 @@
         headers: headers,
         body: body,
         credentials: credentials,
+        redirect: credentials === "omit" ? "manual" : "follow",
         cache: "no-store",
         signal: controller.signal
       }).then(function (response) {
         clearTimeout(timer);
+        if (response.type === "opaqueredirect" || response.status === 301 || response.status === 302 || response.status === 303 || response.status === 307 || response.status === 308) {
+          throw new RpcError("Transmission did not accept the password.", { locked: true });
+        }
         if (response.status === 409) {
           var sid = response.headers.get("X-Transmission-Session-Id");
           var rpcVersion = response.headers.get("X-Transmission-Rpc-Version");
