@@ -86,7 +86,7 @@ The client calls the absolute path `/transmission/rpc`. From a page at `/transmi
 
 ### Interface version
 
-The interface has one semantic version, and it stays on `0.0.x` until a 1.0 release. Settings shows it as “Interface 0.0.x”, and adds the daemon version when `session_get` has returned one. The same string is the cache-busting query on every static file: `app.css?v0.0.x`, `app.js?v0.0.x`, `manifest.webmanifest?v0.0.x`, icon URLs, and `sw.js?v0.0.x`. The HTML links use that query. Raising the constant changes every URL, and the service worker drops the previous cache when it activates.
+The interface version is `1.0.0`. Settings shows it as “Interface 1.0.0”, and adds the daemon version when `session_get` has returned one. The same string is the cache-busting query on every static file: `app.css?v1.0.0`, `app.js?v1.0.0`, `manifest.webmanifest?v1.0.0`, icon URLs, and `sw.js?v1.0.0`. The HTML links use that query. Raising the version changes every URL, and the service worker drops the previous cache when it activates. The `v1.0.0` tag on the repository is this release.
 
 `Deployment/webui` also contains an empty `default.json`. Leave that file in the web home. It is there so Transmission does not report a missing `default.json` when it starts.
 

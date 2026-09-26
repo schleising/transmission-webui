@@ -2,7 +2,7 @@
 
 A browser interface for a [Transmission](https://transmissionbt.com/) daemon. It is a static page: it has no server of its own, and the only password is the one that daemon already requires. Transmission 4.1 or newer serves the page from `TRANSMISSION_WEB_HOME` and answers JSON-RPC 2.0 at `/transmission/rpc`.
 
-The interface stays on version `0.0.x` until a 1.0 release. Settings shows the current interface version, and the daemon version once the session has been read. Copy on screen uses British spelling. RPC names stay as Transmission spells them.
+The interface version is 1.0.0. Settings shows that version, and the daemon version once the session has been read. Copy on screen uses British spelling. RPC names stay as Transmission spells them.
 
 The behaviour of the page is written up in [Design/transmission-webui.md](Design/transmission-webui.md). The pictures in that folder are earlier mockups.
 
@@ -25,13 +25,12 @@ The behaviour of the page is written up in [Design/transmission-webui.md](Design
 
 ## Install
 
-A release tag will be published on [schleising/transmission-webui](https://github.com/schleising/transmission-webui). That tag’s `Deployment/webui` directory is what you copy into the daemon’s web home. Until the first tag exists, use `Deployment/webui` from the repository.
+Release [v1.0.0](https://github.com/schleising/transmission-webui/releases/tag/v1.0.0) is the tree to install. Its `Deployment/webui` directory is what you copy into the daemon’s web home.
 
 ```bash
 git clone https://github.com/schleising/transmission-webui.git
 cd transmission-webui
-# When a tag exists:
-# git checkout <tag>
+git checkout v1.0.0
 ```
 
 Copy the contents of `Deployment/webui` into the directory Transmission is using as `TRANSMISSION_WEB_HOME`. The copy must include the empty `default.json` in that directory. Leave it empty. It stops Transmission reporting a missing `default.json` at startup.
