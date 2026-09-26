@@ -99,7 +99,7 @@ server {
 
   client_max_body_size 16m;
 
-  add_header Content-Security-Policy "default-src 'self'; connect-src 'self'; style-src 'self'; script-src 'self'; manifest-src 'self'; img-src 'self' data: blob:; worker-src 'self'; base-uri 'none'; form-action 'none'" always;
+  add_header Content-Security-Policy "default-src 'self'; connect-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'; manifest-src 'self'; img-src 'self' data: blob:; worker-src 'self'; base-uri 'none'; form-action 'none'" always;
 
   location /transmission/ {
     proxy_pass http://127.0.0.1:9091;
@@ -133,6 +133,8 @@ A second instance repeats the server with its own `server_name` and upstream por
 | `Connection ""` with `proxy_http_version 1.1` | Drops the browser’s hop-by-hop `Connection` header. |
 
 `client_max_body_size 16m` leaves room for a `.torrent` file sent as base64 `metainfo`. Raise it if a larger file is rejected.
+
+`style-src` includes `'unsafe-inline'` so the page can place a menu against a row and set a progress fill. Scripts stay in files.
 
 The `Host` value that reaches a daemon must be on that daemon’s `rpc_host_whitelist`. Localhost and IP addresses are already allowed, which covers opening the daemon port directly. Add each public hostname to the whitelist of the daemon it proxies to.
 
