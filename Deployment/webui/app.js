@@ -1,7 +1,7 @@
 (function () {
   var LIBRARY_FIELDS = ["id", "name", "status", "percent_done", "rate_download", "rate_upload", "eta", "total_size", "upload_ratio", "error_string"];
   var UNLOCK_FIELDS = ["rpc_version_semver", "version", "units", "download_dir", "start_added_torrents"];
-  var DETAIL_FIELDS = ["id", "name", "status", "error", "error_string", "percent_done", "recheck_progress", "rate_download", "rate_upload", "eta", "upload_ratio", "total_size", "size_when_done", "downloaded_ever", "uploaded_ever", "left_until_done", "download_dir", "hash_string", "is_private", "comment", "labels", "queue_position", "peers_connected", "magnet_link", "bandwidth_priority", "honors_session_limits", "download_limit", "download_limited", "upload_limit", "upload_limited", "seed_ratio_mode", "seed_ratio_limit", "seed_idle_mode", "seed_idle_limit", "peer_limit", "group", "sequential_download", "files", "file_stats", "wanted", "priorities", "peers", "peers_from", "trackers", "tracker_stats", "tracker_list", "pieces", "piece_count", "piece_size"];
+  var DETAIL_FIELDS = ["id", "name", "status", "error", "error_string", "percent_done", "percent_complete", "recheck_progress", "rate_download", "rate_upload", "eta", "upload_ratio", "total_size", "size_when_done", "have_valid", "have_unchecked", "downloaded_ever", "uploaded_ever", "left_until_done", "download_dir", "hash_string", "is_private", "comment", "labels", "queue_position", "peers_connected", "magnet_link", "bandwidth_priority", "honors_session_limits", "download_limit", "download_limited", "upload_limit", "upload_limited", "seed_ratio_mode", "seed_ratio_limit", "seed_idle_mode", "seed_idle_limit", "peer_limit", "group", "sequential_download", "files", "file_stats", "wanted", "priorities", "peers", "peers_from", "trackers", "tracker_stats", "tracker_list", "pieces", "piece_count", "piece_size"];
   var SESSION_FIELDS = ["speed_limit_down", "speed_limit_down_enabled", "speed_limit_up", "speed_limit_up_enabled", "alt_speed_down", "alt_speed_up", "alt_speed_enabled", "alt_speed_time_enabled", "alt_speed_time_begin", "alt_speed_time_end", "alt_speed_time_day", "download_dir", "incomplete_dir", "incomplete_dir_enabled", "start_added_torrents", "rename_partial_files", "trash_original_torrent_files", "script_torrent_done_filename", "script_torrent_done_enabled", "script_torrent_added_filename", "script_torrent_added_enabled", "script_torrent_done_seeding_filename", "script_torrent_done_seeding_enabled", "seed_ratio_limited", "seed_ratio_limit", "idle_seeding_limit_enabled", "idle_seeding_limit", "peer_port", "peer_port_random_on_start", "port_forwarding_enabled", "encryption", "peer_limit_global", "peer_limit_per_torrent", "dht_enabled", "pex_enabled", "lpd_enabled", "preferred_transports", "download_queue_enabled", "download_queue_size", "seed_queue_enabled", "seed_queue_size", "queue_stalled_enabled", "queue_stalled_minutes", "blocklist_enabled", "blocklist_url", "blocklist_size", "version", "rpc_version_semver", "units"];
   var STATUS = ["Stopped", "Queued to verify", "Verifying", "Queued to download", "Downloading", "Queued to seed", "Seeding"];
   var FILTERS = [["all", "All"], ["downloading", "Downloading"], ["seeding", "Seeding"], ["stopped", "Stopped"], ["checking", "Checking"], ["error", "Error"], ["active", "Active"], ["finished", "Finished"]];
@@ -181,9 +181,15 @@
   function shownFraction(torrent) {
     var reported = Number(torrent && torrent.percent_done);
     if (!Number.isFinite(reported) || reported < 0) reported = 0;
-    var bits = torrent && torrent.pieces ? pieceBits(torrent) : null;
-    var fromPieces = bits ? bits.have / bits.count : 0;
-    return Math.min(1, Math.max(reported, fromPieces));
+    if (reported > 1) reported = 1;
+    return reported;
+  }
+  function haveBytes(detail) {
+    var valid = Number(detail && detail.have_valid);
+    var unchecked = Number(detail && detail.have_unchecked);
+    if (!Number.isFinite(valid) || valid < 0) valid = 0;
+    if (!Number.isFinite(unchecked) || unchecked < 0) unchecked = 0;
+    return { valid: valid, unchecked: unchecked, total: valid + unchecked };
   }
   function progressWidth(fraction) {
     return Math.max(0, Math.min(100, Number(fraction) * 100)).toFixed(2) + "%";
@@ -348,6 +354,7 @@
     state.inFlight = true;
     Twui.rpc("torrent_get", { fields: LIBRARY_FIELDS }).then(function (list) {
       state.torrents = list.torrents || [];
+      state.torrents.forEach(applyLibraryTorrent);
       var alive = new Set(state.torrents.map(function (torrent) { return torrent.id; }));
       Array.from(state.selected).forEach(function (id) { if (!alive.has(id)) state.selected.delete(id); });
       state.loaded = true;
@@ -447,9 +454,15 @@
   function shellHtml() {
     return '<div id="shell" class="shell"><aside class="sidebar"><div class="brand">' + markSvg() + '<div class="brand-copy"><div class="brand-name clip" data-brand data-full="' + esc(state.title) + '">' + esc(state.title) + '</div><div class="host clip" data-full="' + esc(location.host) + '">' + esc(location.host) + '</div></div></div><nav class="nav" aria-label="Sections"><button type="button" class="nav-btn" data-act="view" data-view="torrents">Torrents</button><button type="button" class="nav-btn" data-act="view" data-view="activity">Activity</button><button type="button" class="nav-btn" data-act="view" data-view="settings">Settings</button></nav><div class="filters" aria-label="Filters">' + filterButtons("filter-btn") + '</div><div class="speeds"><div><span>Down</span><strong class="slot" data-speed="down"></strong></div><div><span>Up</span><strong class="slot" data-speed="up"></strong></div></div></aside><div class="workspace"><header class="phone-head"><div class="brand">' + markSvg() + '<div class="brand-copy"><div class="brand-name clip" data-brand data-full="' + esc(state.title) + '">' + esc(state.title) + '</div><div class="host clip" data-full="' + esc(location.host) + '">' + esc(location.host) + '</div></div></div><div class="speeds"><div><span>Down</span><strong data-speed="down"></strong></div><div><span>Up</span><strong data-speed="up"></strong></div></div></header><div class="chips" aria-label="Library">' + filterButtons("chip") + '</div><div class="toolbar"><input id="search" class="search" type="search" placeholder="Filter by name" aria-label="Filter by name" value="' + esc(state.query) + '"><div class="toolbar-actions"><button type="button" class="ghost" data-act="select-mode">Select</button><button type="button" class="ghost" data-act="start">Start</button><button type="button" class="ghost" data-act="stop">Stop</button><button type="button" class="ghost" data-act="verify">Verify</button><button type="button" class="ghost" data-act="remove">Remove</button><button type="button" class="ghost" data-act="more">More</button><button type="button" class="ghost" data-act="lock">Lock</button><button type="button" class="primary" data-act="add">Add</button></div></div><div id="banner" class="banner" hidden></div><div id="list-scroll" class="scroller"></div></div><aside id="inspector" class="inspector" aria-label="Torrent"></aside><nav class="tabbar" aria-label="Sections"><button type="button" class="bar-btn" data-act="view" data-view="torrents">Torrents</button><button type="button" class="bar-btn" data-act="view" data-view="activity">Activity</button><button type="button" class="bar-btn" data-act="view" data-view="settings">Settings</button></nav></div><div id="dialog-root"></div><div id="menu" class="menu" role="menu" hidden></div><div id="tip" class="tip" role="tooltip" hidden></div>';
   }
+  function applyLibraryTorrent(torrent) {
+    if (!state.detail || state.detail.id !== torrent.id) return;
+    LIBRARY_FIELDS.forEach(function (key) {
+      if (key !== "id") state.detail[key] = torrent[key];
+    });
+  }
   function rowHtml(torrent) {
     var selected = state.selected.has(torrent.id);
-    var fraction = state.detail && state.detail.id === torrent.id ? shownFraction(state.detail) : shownFraction(torrent);
+    var fraction = shownFraction(torrent);
     var check = '<span class="check-col"><input type="checkbox" data-check="' + torrent.id + '"' + (selected ? " checked" : "") + ' aria-label="Select ' + esc(torrent.name) + '"></span>';
     return '<div class="row' + (selected ? " selected" : "") + '" data-id="' + torrent.id + '" role="row" aria-selected="' + selected + '">' + check + '<div class="card-body"><div class="name clip" data-full="' + esc(torrent.name) + '">' + esc(torrent.name) + '</div><div class="sub clip' + (torrent.error_string ? " error" : "") + '" data-full="' + esc(subText(torrent)) + '">' + esc(subText(torrent)) + '</div><div class="card-meta"><span>Size <b>' + esc(Twui.formatBytes(torrent.total_size, state.units)) + '</b></span><span>Down <b>' + esc(Twui.formatSpeed(torrent.rate_download, state.units)) + '</b></span><span>Up <b>' + esc(Twui.formatSpeed(torrent.rate_upload, state.units)) + '</b></span><span>ETA <b>' + esc(Twui.formatDuration(torrent.eta)) + '</b></span><span>Ratio <b>' + esc(Twui.formatRatio(torrent.upload_ratio)) + '</b></span></div></div><div class="progress-cell"><span class="' + barClass(torrent) + '" data-live-progress><span style="width:' + progressWidth(fraction) + '"></span></span><span class="pct" data-live-percent>' + esc(Twui.formatPercent(fraction)) + '</span></div><div class="num">' + esc(Twui.formatBytes(torrent.total_size, state.units)) + '</div><div class="num">' + esc(Twui.formatSpeed(torrent.rate_download, state.units)) + '</div><div class="num">' + esc(Twui.formatSpeed(torrent.rate_upload, state.units)) + '</div><div class="num">' + esc(Twui.formatDuration(torrent.eta)) + '</div><div class="num">' + esc(Twui.formatRatio(torrent.upload_ratio)) + '</div></div>';
   }
@@ -509,9 +522,12 @@
     if (state.sequentialSupported && "sequential_download" in detail) controls += checkTorrent("sequential_download", "Download in order", detail.sequential_download);
     controls += '<button type="button" class="ghost" data-act="rename-torrent">Rename</button>';
     var fraction = shownFraction(detail);
+    var held = haveBytes(detail);
+    var haveLabel = Twui.formatBytes(held.total, state.units);
+    if (held.unchecked > 0) haveLabel += " (" + Twui.formatBytes(held.unchecked, state.units) + " not yet checked)";
     var progress = '<div class="inspector-progress"><span class="bar" data-live-progress><span style="width:' + progressWidth(fraction) + '"></span></span><span class="pct" data-live-percent>' + esc(Twui.formatPercent(fraction)) + '</span></div>';
     var pieces = detail.piece_count ? '<canvas class="pieces" aria-label="' + esc(pieceLabel(detail)) + '"></canvas><p class="note" data-live-pieces>' + esc(pieceLabel(detail)) + '</p>' : "";
-    return progress + '<div class="stats">' + stat("Down", Twui.formatSpeed(detail.rate_download, state.units)) + stat("Up", Twui.formatSpeed(detail.rate_upload, state.units)) + stat("ETA", Twui.formatDuration(detail.eta)) + stat("Ratio", Twui.formatRatio(detail.upload_ratio)) + stat("Size", Twui.formatBytes(detail.total_size, state.units)) + stat("Downloaded", Twui.formatBytes(detail.downloaded_ever, state.units)) + stat("Uploaded", Twui.formatBytes(detail.uploaded_ever, state.units)) + stat("Remaining", Twui.formatBytes(detail.left_until_done, state.units)) + stat("Location", detail.download_dir || "") + stat("Hash", detail.hash_string || "") + stat("Privacy", detail.is_private ? "Private" : "Public") + stat("Peers", Twui.formatCount(detail.peers_connected)) + stat("Queue", Twui.formatCount(detail.queue_position)) + "</div>" + (detail.status === 1 || detail.status === 2 ? '<p>Verifying ' + esc(Twui.formatPercent(detail.recheck_progress)) + '</p>' : "") + pieces + controls + (detail.comment ? '<p class="clip" data-full="' + esc(detail.comment) + '">' + esc(detail.comment) + '</p>' : "");
+    return progress + '<div class="stats">' + stat("Down", Twui.formatSpeed(detail.rate_download, state.units)) + stat("Up", Twui.formatSpeed(detail.rate_upload, state.units)) + stat("ETA", Twui.formatDuration(detail.eta)) + stat("Ratio", Twui.formatRatio(detail.upload_ratio)) + stat("Size", Twui.formatBytes(detail.size_when_done, state.units)) + stat("Have", haveLabel) + stat("Remaining", Twui.formatBytes(detail.left_until_done, state.units)) + stat("Downloaded", Twui.formatBytes(detail.downloaded_ever, state.units)) + stat("Uploaded", Twui.formatBytes(detail.uploaded_ever, state.units)) + stat("Location", detail.download_dir || "") + stat("Hash", detail.hash_string || "") + stat("Privacy", detail.is_private ? "Private" : "Public") + stat("Peers", Twui.formatCount(detail.peers_connected)) + stat("Queue", Twui.formatCount(detail.queue_position)) + "</div>" + (detail.status === 1 || detail.status === 2 ? '<p>Verifying ' + esc(Twui.formatPercent(detail.recheck_progress)) + '</p>' : "") + pieces + controls + (detail.comment ? '<p class="clip" data-full="' + esc(detail.comment) + '">' + esc(detail.comment) + '</p>' : "");
   }
   function checkTorrent(key, label, checked) {
     return '<label class="field check"><input type="checkbox" data-torrent="' + key + '"' + (checked ? " checked" : "") + (state.pendingKeys[key] ? " disabled" : "") + "> " + label + "</label>";
@@ -1628,6 +1644,6 @@
   Twui.fine = window.matchMedia("(hover: hover) and (pointer: fine)");
   Twui.wide.addEventListener("change", function () { if (state.mode === "live") paintLive(); });
 
-  if ("serviceWorker" in navigator) navigator.serviceWorker.register(location.origin + "/transmission/web/sw.js?v0.0.2").catch(function () {});
+  if ("serviceWorker" in navigator) navigator.serviceWorker.register(location.origin + "/transmission/web/sw.js?v0.0.4").catch(function () {});
   probe();
 })();
