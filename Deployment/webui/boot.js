@@ -1,6 +1,6 @@
 /* Applies the saved colour, title, and appearance before the body is painted. */
 (function () {
-  var VERSION = "1.0.0";
+  var VERSION = "0.0.1";
   var DEFAULT_COLOUR = "#14756F";
   var DEFAULT_TITLE = "Transmission";
   var root = document.documentElement;
@@ -75,6 +75,16 @@
     return window.matchMedia("(prefers-color-scheme: dark)").matches;
   }
 
+  function gamutRgb(L, C, H) {
+    var chroma = C;
+    var rgb = oklchToRgb(L, chroma, H);
+    while (!rgb && chroma > 0) {
+      chroma = Math.max(0, Math.round((chroma - 0.005) * 1000) / 1000);
+      rgb = oklchToRgb(L, chroma, H);
+    }
+    return rgb;
+  }
+
   function applyTheme(hex, mode) {
     var pick = hexToOklch(hex);
     if (!pick || pick.C < 0.02) return false;
@@ -89,8 +99,8 @@
         var L = 0.22 + step * 0.01;
         var rgb = oklchToRgb(L, cTry, H);
         if (!rgb) continue;
-        var labelLight = oklchToRgb(0.98, Math.min(cTry, 0.01), H);
-        var labelDark = oklchToRgb(0.22, Math.min(cTry, 0.03), H);
+        var labelLight = gamutRgb(0.98, Math.min(cTry, 0.01), H);
+        var labelDark = gamutRgb(0.22, Math.min(cTry, 0.03), H);
         if (!labelLight || !labelDark) continue;
         var cl = contrast(lum(rgb), lum(labelLight));
         var cd = contrast(lum(rgb), lum(labelDark));

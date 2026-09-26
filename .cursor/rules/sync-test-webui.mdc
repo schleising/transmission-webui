@@ -1,0 +1,19 @@
+---
+description: Bump the WebUI cache-bust version and copy it into the test web home after UI changes
+alwaysApply: true
+---
+
+# Finish a WebUI change
+
+`Deployment/webui` is the copy that ships. `Testing/webui-test` is the bind mount the test daemon serves. The test tree is gitignored.
+
+After changing anything under `Deployment/webui`, before finishing:
+
+1. Bump the interface semver, staying on `0.0.x` until told otherwise. A fix increments the patch (`0.0.1` to `0.0.2`). Set the same value in `boot.js` (`Twui.VERSION`), `sw.js` (`VERSION` and every shell URL), `index.html` (`application-version` and every `?v` query), `manifest.webmanifest` icon queries, and the `sw.js?v` registration in `app.js`.
+2. Copy the deployment tree into the test area:
+
+```bash
+rsync -a --delete Deployment/webui/ Testing/webui-test/
+```
+
+Do both steps at the end of the change. Saving a file in `Deployment/webui` does not update the test tree or the cache-bust query.

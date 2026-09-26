@@ -359,8 +359,9 @@
     return '<span class="mark" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M8 3v7M4.8 7.8 8 11.2 11.2 7.8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></span>';
   }
   function filterButtons(className) {
-    var html = FILTERS.map(function (filter) {
-      var active = state.filter === filter[0] ? " active" : "";
+    var html = className === "filter-btn" ? '<div class="group-label">Filters</div>' : "";
+    html += FILTERS.map(function (filter) {
+      var active = state.view === "torrents" && state.filter === filter[0] ? " active" : "";
       return '<button type="button" class="' + className + active + '" data-act="filter" data-filter="' + filter[0] + '"><span>' + filter[1] + '</span><span class="count" data-count="' + filter[0] + '">0</span></button>';
     }).join("");
     var labels = labelNames();
@@ -368,14 +369,14 @@
       html += '<div class="group-label">Labels</div>';
       html += labels.map(function (label) {
         var key = "label:" + label[0];
-        var active = state.filter === key ? " active" : "";
+        var active = state.view === "torrents" && state.filter === key ? " active" : "";
         return '<button type="button" class="' + className + active + '" data-act="filter" data-filter="' + esc(key) + '"><span class="clip">' + esc(label[0]) + '</span><span class="count">' + Twui.formatCount(label[1]) + '</span></button>';
       }).join("");
     }
     return html;
   }
   function shellHtml() {
-    return '<div id="shell" class="shell"><aside class="sidebar"><div class="brand">' + markSvg() + '<div class="brand-copy"><div class="brand-name clip" data-brand data-full="' + esc(state.title) + '">' + esc(state.title) + '</div><div class="host clip" data-full="' + esc(location.host) + '">' + esc(location.host) + '</div></div></div><nav class="nav" aria-label="Sections"><button type="button" class="nav-btn" data-act="view" data-view="torrents">Torrents</button><button type="button" class="nav-btn" data-act="view" data-view="activity">Activity</button><button type="button" class="nav-btn" data-act="view" data-view="settings">Settings</button></nav><div class="filters" aria-label="Library">' + filterButtons("filter-btn") + '</div><div class="speeds"><div><span>Down</span><strong class="slot" data-speed="down"></strong></div><div><span>Up</span><strong class="slot" data-speed="up"></strong></div></div></aside><div class="workspace"><header class="phone-head"><div class="brand">' + markSvg() + '<div class="brand-copy"><div class="brand-name clip" data-brand data-full="' + esc(state.title) + '">' + esc(state.title) + '</div><div class="host clip" data-full="' + esc(location.host) + '">' + esc(location.host) + '</div></div></div><div class="speeds"><div><span>Down</span><strong data-speed="down"></strong></div><div><span>Up</span><strong data-speed="up"></strong></div></div></header><div class="chips" aria-label="Library">' + filterButtons("chip") + '</div><div class="toolbar"><input id="search" class="search" type="search" placeholder="Filter by name" aria-label="Filter by name" value="' + esc(state.query) + '"><div class="toolbar-actions"><button type="button" class="ghost" data-act="select-mode">Select</button><button type="button" class="ghost" data-act="start">Start</button><button type="button" class="ghost" data-act="stop">Stop</button><button type="button" class="ghost" data-act="verify">Verify</button><button type="button" class="ghost" data-act="more">More</button><button type="button" class="ghost" data-act="lock">Lock</button><button type="button" class="primary" data-act="add">Add</button></div></div><div id="banner" class="banner" hidden></div><div id="list-scroll" class="scroller"></div></div><aside id="inspector" class="inspector" aria-label="Torrent"></aside><nav class="tabbar" aria-label="Sections"><button type="button" class="bar-btn" data-act="view" data-view="torrents">Torrents</button><button type="button" class="bar-btn" data-act="view" data-view="activity">Activity</button><button type="button" class="bar-btn" data-act="view" data-view="settings">Settings</button></nav></div><div id="dialog-root"></div><div id="menu" class="menu" role="menu" hidden></div><div id="tip" class="tip" role="tooltip" hidden></div>';
+    return '<div id="shell" class="shell"><aside class="sidebar"><div class="brand">' + markSvg() + '<div class="brand-copy"><div class="brand-name clip" data-brand data-full="' + esc(state.title) + '">' + esc(state.title) + '</div><div class="host clip" data-full="' + esc(location.host) + '">' + esc(location.host) + '</div></div></div><nav class="nav" aria-label="Sections"><button type="button" class="nav-btn" data-act="view" data-view="torrents">Torrents</button><button type="button" class="nav-btn" data-act="view" data-view="activity">Activity</button><button type="button" class="nav-btn" data-act="view" data-view="settings">Settings</button></nav><div class="filters" aria-label="Filters">' + filterButtons("filter-btn") + '</div><div class="speeds"><div><span>Down</span><strong class="slot" data-speed="down"></strong></div><div><span>Up</span><strong class="slot" data-speed="up"></strong></div></div></aside><div class="workspace"><header class="phone-head"><div class="brand">' + markSvg() + '<div class="brand-copy"><div class="brand-name clip" data-brand data-full="' + esc(state.title) + '">' + esc(state.title) + '</div><div class="host clip" data-full="' + esc(location.host) + '">' + esc(location.host) + '</div></div></div><div class="speeds"><div><span>Down</span><strong data-speed="down"></strong></div><div><span>Up</span><strong data-speed="up"></strong></div></div></header><div class="chips" aria-label="Library">' + filterButtons("chip") + '</div><div class="toolbar"><input id="search" class="search" type="search" placeholder="Filter by name" aria-label="Filter by name" value="' + esc(state.query) + '"><div class="toolbar-actions"><button type="button" class="ghost" data-act="select-mode">Select</button><button type="button" class="ghost" data-act="start">Start</button><button type="button" class="ghost" data-act="stop">Stop</button><button type="button" class="ghost" data-act="verify">Verify</button><button type="button" class="ghost" data-act="remove">Remove</button><button type="button" class="ghost" data-act="more">More</button><button type="button" class="ghost" data-act="lock">Lock</button><button type="button" class="primary" data-act="add">Add</button></div></div><div id="banner" class="banner" hidden></div><div id="list-scroll" class="scroller"></div></div><aside id="inspector" class="inspector" aria-label="Torrent"></aside><nav class="tabbar" aria-label="Sections"><button type="button" class="bar-btn" data-act="view" data-view="torrents">Torrents</button><button type="button" class="bar-btn" data-act="view" data-view="activity">Activity</button><button type="button" class="bar-btn" data-act="view" data-view="settings">Settings</button></nav></div><div id="dialog-root"></div><div id="menu" class="menu" role="menu" hidden></div><div id="tip" class="tip" role="tooltip" hidden></div>';
   }
   function rowHtml(torrent) {
     var selected = state.selected.has(torrent.id);
@@ -406,7 +407,7 @@
     var tabs = ["overview", "files", "peers", "trackers"].map(function (tab) {
       return '<button type="button" class="tab' + (state.tab === tab ? " active" : "") + '" data-act="tab" data-tab="' + tab + '">' + tab.charAt(0).toUpperCase() + tab.slice(1) + '</button>';
     }).join("");
-    return '<div class="inspector-head"><button type="button" class="ghost" data-act="back">Back</button><h2 class="clip" data-full="' + esc(name) + '">' + esc(name) + '</h2></div><div class="inspector-actions"><button type="button" class="ghost" data-act="start">Start</button><button type="button" class="ghost" data-act="stop">Stop</button><button type="button" class="ghost" data-act="verify">Verify</button><button type="button" class="ghost" data-act="more">More</button></div><div class="tabs" role="tablist">' + tabs + '</div><div class="inspector-body">' + inspectorBody(detail) + '</div>';
+    return '<div class="inspector-head"><button type="button" class="ghost" data-act="back">Back</button><h2 class="clip" data-full="' + esc(name) + '">' + esc(name) + '</h2><button type="button" class="ghost inspector-close" data-act="close-inspector">Close</button></div><div class="inspector-actions"><button type="button" class="ghost" data-act="start">Start</button><button type="button" class="ghost" data-act="stop">Stop</button><button type="button" class="ghost" data-act="verify">Verify</button><button type="button" class="ghost" data-act="remove">Remove</button><button type="button" class="ghost" data-act="more">More</button></div><div class="tabs" role="tablist">' + tabs + '</div><div class="inspector-body">' + inspectorBody(detail) + '</div>';
   }
   function inspectorBody(detail) {
     if (state.tab === "files") return filesHtml(detail);
@@ -489,7 +490,7 @@
       down += torrent.rate_download || 0;
       up += torrent.rate_upload || 0;
     });
-    return '<div class="inspector-head"><h2>' + Twui.formatCount(ids.length) + ' torrents</h2></div><div class="inspector-actions"><button type="button" class="ghost" data-act="start">Start</button><button type="button" class="ghost" data-act="stop">Stop</button><button type="button" class="ghost" data-act="verify">Verify</button><button type="button" class="ghost" data-act="more">More</button></div><div class="inspector-body"><div class="stats">' + stat("Size", Twui.formatBytes(size, state.units)) + stat("Down", Twui.formatSpeed(down, state.units)) + stat("Up", Twui.formatSpeed(up, state.units)) + "</div><p class='note'>Files and peers are shown when one torrent is selected.</p></div>";
+    return '<div class="inspector-head"><h2>' + Twui.formatCount(ids.length) + ' torrents</h2><button type="button" class="ghost inspector-close" data-act="close-inspector">Close</button></div><div class="inspector-actions"><button type="button" class="ghost" data-act="start">Start</button><button type="button" class="ghost" data-act="stop">Stop</button><button type="button" class="ghost" data-act="verify">Verify</button><button type="button" class="ghost" data-act="remove">Remove</button><button type="button" class="ghost" data-act="more">More</button></div><div class="inspector-body"><div class="stats">' + stat("Size", Twui.formatBytes(size, state.units)) + stat("Down", Twui.formatSpeed(down, state.units)) + stat("Up", Twui.formatSpeed(up, state.units)) + "</div><p class='note'>Files and peers are shown when one torrent is selected.</p></div>";
   }
 
   function activityHtml() {
@@ -707,7 +708,7 @@
       node.textContent = Twui.formatCount(countFilter(node.dataset.count));
     });
     document.querySelectorAll("[data-filter]").forEach(function (button) {
-      button.classList.toggle("active", button.dataset.filter === state.filter);
+      button.classList.toggle("active", state.view === "torrents" && button.dataset.filter === state.filter);
     });
   }
   function paintSpeeds() {
@@ -731,8 +732,8 @@
     var hasSelection = state.selected.size > 0 || (state.menuIds && state.menuIds.length);
     document.querySelectorAll("[data-act]").forEach(function (button) {
       var act = button.dataset.act;
-      if (act === "more" && button.closest(".toolbar, .inspector-actions")) {
-        button.disabled = state.selected.size === 0;
+      if ((act === "more" || act === "remove") && button.closest(".toolbar, .inspector-actions")) {
+        button.disabled = state.pendingAction === act || state.selected.size === 0;
         return;
       }
       if (!ACTIONS[act]) return;
@@ -821,14 +822,17 @@
     state.pendingKeys.colour = true;
     state.rebuildSettings = true;
     paintLive();
-    try {
-      Twui.saveColour(hex);
-      state.colour = hex;
-      state.prefError = "";
-      if (!Twui.applyTheme(hex, state.appearance)) throw new Error("theme");
-      refreshIcons();
-    } catch (error) {
-      state.prefError = "The colour could not be stored.";
+    if (!Twui.applyTheme(hex, state.appearance)) {
+      state.prefError = "Choose a colour with a visible hue.";
+    } else {
+      try {
+        Twui.saveColour(hex);
+        state.colour = hex;
+        state.prefError = "";
+        refreshIcons();
+      } catch (error) {
+        state.prefError = "The colour could not be stored.";
+      }
     }
     delete state.pendingKeys.colour;
     state.rebuildSettings = true;
@@ -1141,6 +1145,7 @@
     }
     if (name === "filter") {
       state.filter = act.dataset.filter;
+      state.view = "torrents";
       localStorage.setItem("twui.filter", state.filter);
       paintLive();
       return;
@@ -1167,6 +1172,13 @@
       var ids = selectedIds();
       if (!ids.length && onlyId() != null) ids = [onlyId()];
       openMenu(rect.left, rect.bottom + 4, ids);
+      return;
+    }
+    if (name === "close-inspector") {
+      state.selected = new Set();
+      state.detail = null;
+      state.detailOpen = false;
+      paintLive();
       return;
     }
     if (name === "back") {
@@ -1524,6 +1536,6 @@
   Twui.fine = window.matchMedia("(hover: hover) and (pointer: fine)");
   Twui.wide.addEventListener("change", function () { if (state.mode === "live") paintLive(); });
 
-  if ("serviceWorker" in navigator) navigator.serviceWorker.register(location.origin + "/transmission/web/sw.js?v1.0.0").catch(function () {});
+  if ("serviceWorker" in navigator) navigator.serviceWorker.register(location.origin + "/transmission/web/sw.js?v0.0.1").catch(function () {});
   probe();
 })();
