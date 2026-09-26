@@ -1,7 +1,7 @@
 (function () {
   var LIBRARY_FIELDS = ["id", "name", "status", "percent_done", "rate_download", "rate_upload", "eta", "total_size", "upload_ratio", "error_string"];
   var UNLOCK_FIELDS = ["rpc_version_semver", "version", "units", "download_dir", "start_added_torrents"];
-  var DETAIL_FIELDS = ["id", "name", "status", "error", "error_string", "percent_done", "percent_complete", "recheck_progress", "rate_download", "rate_upload", "eta", "upload_ratio", "total_size", "size_when_done", "have_valid", "have_unchecked", "downloaded_ever", "uploaded_ever", "left_until_done", "download_dir", "hash_string", "is_private", "comment", "labels", "queue_position", "peers_connected", "magnet_link", "bandwidth_priority", "honors_session_limits", "download_limit", "download_limited", "upload_limit", "upload_limited", "seed_ratio_mode", "seed_ratio_limit", "seed_idle_mode", "seed_idle_limit", "peer_limit", "group", "sequential_download", "files", "file_stats", "wanted", "priorities", "peers", "peers_from", "trackers", "tracker_stats", "tracker_list", "pieces", "piece_count", "piece_size"];
+  var DETAIL_FIELDS = ["id", "name", "status", "error", "error_string", "percent_done", "percent_complete", "recheck_progress", "rate_download", "rate_upload", "eta", "upload_ratio", "total_size", "size_when_done", "have_valid", "have_unchecked", "downloaded_ever", "uploaded_ever", "left_until_done", "download_dir", "hash_string", "is_private", "comment", "labels", "queue_position", "peers_connected", "magnet_link", "bandwidth_priority", "honors_session_limits", "download_limit", "download_limited", "upload_limit", "upload_limited", "seed_ratio_mode", "seed_ratio_limit", "seed_idle_mode", "seed_idle_limit", "peer_limit", "group", "sequential_download", "sequential_download_from_piece", "files", "file_stats", "wanted", "priorities", "peers", "peers_from", "trackers", "tracker_stats", "tracker_list", "pieces", "availability", "piece_count", "piece_size"];
   var SESSION_FIELDS = ["speed_limit_down", "speed_limit_down_enabled", "speed_limit_up", "speed_limit_up_enabled", "alt_speed_down", "alt_speed_up", "alt_speed_enabled", "alt_speed_time_enabled", "alt_speed_time_begin", "alt_speed_time_end", "alt_speed_time_day", "download_dir", "incomplete_dir", "incomplete_dir_enabled", "start_added_torrents", "rename_partial_files", "trash_original_torrent_files", "script_torrent_done_filename", "script_torrent_done_enabled", "script_torrent_added_filename", "script_torrent_added_enabled", "script_torrent_done_seeding_filename", "script_torrent_done_seeding_enabled", "seed_ratio_limited", "seed_ratio_limit", "idle_seeding_limit_enabled", "idle_seeding_limit", "peer_port", "peer_port_random_on_start", "port_forwarding_enabled", "encryption", "peer_limit_global", "peer_limit_per_torrent", "dht_enabled", "pex_enabled", "lpd_enabled", "preferred_transports", "download_queue_enabled", "download_queue_size", "seed_queue_enabled", "seed_queue_size", "queue_stalled_enabled", "queue_stalled_minutes", "blocklist_enabled", "blocklist_url", "blocklist_size", "version", "rpc_version_semver", "units"];
   var STATUS = ["Stopped", "Queued to verify", "Verifying", "Queued to download", "Downloading", "Queued to seed", "Seeding"];
   var FILTERS = [["all", "All"], ["downloading", "Downloading"], ["seeding", "Seeding"], ["stopped", "Stopped"], ["checking", "Checking"], ["error", "Error"], ["active", "Active"], ["finished", "Finished"]];
@@ -150,9 +150,14 @@
     return state.view === "torrents" && state.selected.size === 1 && (Twui.wide.matches || state.detailOpen);
   }
   function barClass(torrent) {
+    if (torrentComplete(torrent)) return "bar complete";
     if (torrent.error_string) return "bar error";
     if (torrent.status === 0) return "bar stopped";
     return "bar";
+  }
+  function torrentComplete(torrent) {
+    var done = Number(torrent && torrent.percent_done);
+    return Number.isFinite(done) && done >= 1;
   }
   function subText(torrent) {
     return torrent.error_string || STATUS[torrent.status] || "Stopped";
@@ -192,7 +197,64 @@
     return { valid: valid, unchecked: unchecked, total: valid + unchecked };
   }
   function progressWidth(fraction) {
-    return Math.max(0, Math.min(100, Number(fraction) * 100)).toFixed(2) + "%";
+    var n = Number(fraction);
+    if (!Number.isFinite(n) || n <= 0) return "0%";
+    if (n >= 1) return "100%";
+    return (Math.floor(n * 10000) / 100).toFixed(2) + "%";
+  }
+  function progressText(fraction) {
+    var n = Number(fraction);
+    if (!Number.isFinite(n) || n <= 0) return "0.00%";
+    if (n >= 1) return "100.00%";
+    return (Math.floor(n * 10000) / 100).toFixed(2) + "%";
+  }
+  function pieceHas(bits, index) {
+    return (bits.bin.charCodeAt(index >> 3) & (128 >> (index & 7))) !== 0;
+  }
+  function pieceSpan(index, detail, count) {
+    var size = Number(detail.piece_size) || 0;
+    var total = Number(detail.total_size) || 0;
+    if (index === count - 1 && total > size) {
+      var last = total - size * (count - 1);
+      if (last > 0) return last;
+    }
+    return size;
+  }
+  function downloadingPieces(detail, bits) {
+    var active = {};
+    if (!detail || detail.status !== 4 || !bits) return active;
+    var sequential = !!detail.sequential_download;
+    var fromPiece = Number(detail.sequential_download_from_piece);
+    if (!Number.isFinite(fromPiece) || fromPiece < 0) fromPiece = 0;
+    var files = detail.files || [];
+    var stats = detail.file_stats || [];
+    files.forEach(function (file, index) {
+      var info = stats[index] || {};
+      if (info.wanted === false) return;
+      var done = Number(info.bytes_completed != null ? info.bytes_completed : file.bytes_completed) || 0;
+      var begin = Number(file.begin_piece);
+      var end = Number(file.end_piece);
+      if (!Number.isFinite(begin) || !Number.isFinite(end)) return;
+      var accounted = 0;
+      var incomplete = [];
+      for (var piece = begin; piece < end && piece < bits.count; piece++) {
+        var bytes = pieceSpan(piece, detail, bits.count);
+        if (pieceHas(bits, piece)) accounted += bytes;
+        else incomplete.push(piece);
+      }
+      var partial = done - accounted;
+      if (partial <= 0 || !incomplete.length) return;
+      // Rare pieces are requested out of order. The RPC only gives the leftover
+      // byte count, so a run of blue from the first gap is not the piece in flight.
+      if (!sequential && incomplete.length !== 1) return;
+      var start = sequential ? Math.max(begin, Math.min(fromPiece, end - 1)) : begin;
+      for (var i = 0; i < incomplete.length && partial > 0; i++) {
+        if (incomplete[i] < start) continue;
+        active[incomplete[i]] = true;
+        partial -= pieceSpan(incomplete[i], detail, bits.count);
+      }
+    });
+    return active;
   }
   function pieceLabel(detail) {
     var bits = pieceBits(detail);
@@ -204,7 +266,7 @@
     if (!canvas || !bits) return;
     var width = canvas.parentElement ? canvas.parentElement.clientWidth : 0;
     if (width < 40) width = 320;
-    var cell = bits.count > 8000 ? 2 : bits.count > 2000 ? 3 : 6;
+    var cell = window.matchMedia("(max-width: 719px)").matches ? 10 : 7;
     var cols = Math.max(1, Math.floor(width / cell));
     var rows = Math.ceil(bits.count / cols);
     var dpr = Math.min(window.devicePixelRatio || 1, 2);
@@ -212,16 +274,30 @@
     canvas.height = Math.floor(rows * cell * dpr);
     canvas.style.height = (rows * cell) + "px";
     var ctx = canvas.getContext("2d");
-    var styles = getComputedStyle(document.documentElement);
+    var availability = detail.availability || [];
+    var active = downloadingPieces(detail, bits);
+    var colours = { have: "#00c853", active: "#1976d2", unavailable: "#d32f2f", missing: "#9a9a9a" };
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    ctx.fillStyle = styles.getPropertyValue("--track").trim() || "#d7e6e3";
+    ctx.fillStyle = "#ffffff";
     ctx.fillRect(0, 0, cols * cell, rows * cell);
-    ctx.fillStyle = styles.getPropertyValue("--accent").trim() || "#14756f";
-    var gap = cell > 2 ? 1 : 0;
-    for (var i = 0; i < bits.count; i++) {
-      if ((bits.bin.charCodeAt(i >> 3) & (128 >> (i & 7))) === 0) continue;
-      ctx.fillRect((i % cols) * cell, Math.floor(i / cols) * cell, cell - gap, cell - gap);
+    var gap = 1;
+    function paint(kind) {
+      ctx.fillStyle = colours[kind];
+      for (var i = 0; i < bits.count; i++) {
+        var have = pieceHas(bits, i);
+        var peers = Number(availability[i]);
+        var kindOf = "missing";
+        if (have || peers === -1) kindOf = "have";
+        else if (peers === 0) kindOf = "unavailable";
+        else if (active[i]) kindOf = "active";
+        if (kindOf !== kind) continue;
+        ctx.fillRect((i % cols) * cell, Math.floor(i / cols) * cell, cell - gap, cell - gap);
+      }
     }
+    paint("missing");
+    paint("unavailable");
+    paint("active");
+    paint("have");
   }
   function mountPieces(root, detail) {
     if (!root) return;
@@ -235,7 +311,7 @@
       fill.style.width = progressWidth(fraction);
     });
     inspector.querySelectorAll("[data-live-percent]").forEach(function (node) {
-      node.textContent = Twui.formatPercent(fraction);
+      node.textContent = progressText(fraction);
     });
     inspector.querySelectorAll("[data-live-pieces]").forEach(function (node) {
       node.textContent = pieceLabel(detail);
@@ -452,7 +528,7 @@
     return html;
   }
   function shellHtml() {
-    return '<div id="shell" class="shell"><aside class="sidebar"><div class="brand">' + markSvg() + '<div class="brand-copy"><div class="brand-name clip" data-brand data-full="' + esc(state.title) + '">' + esc(state.title) + '</div><div class="host clip" data-full="' + esc(location.host) + '">' + esc(location.host) + '</div></div></div><nav class="nav" aria-label="Sections"><button type="button" class="nav-btn" data-act="view" data-view="torrents">Torrents</button><button type="button" class="nav-btn" data-act="view" data-view="activity">Activity</button><button type="button" class="nav-btn" data-act="view" data-view="settings">Settings</button></nav><div class="filters" aria-label="Filters">' + filterButtons("filter-btn") + '</div><div class="speeds"><div><span>Down</span><strong class="slot" data-speed="down"></strong></div><div><span>Up</span><strong class="slot" data-speed="up"></strong></div></div></aside><div class="workspace"><header class="phone-head"><div class="brand">' + markSvg() + '<div class="brand-copy"><div class="brand-name clip" data-brand data-full="' + esc(state.title) + '">' + esc(state.title) + '</div><div class="host clip" data-full="' + esc(location.host) + '">' + esc(location.host) + '</div></div></div><div class="speeds"><div><span>Down</span><strong data-speed="down"></strong></div><div><span>Up</span><strong data-speed="up"></strong></div></div></header><div class="chips" aria-label="Library">' + filterButtons("chip") + '</div><div class="toolbar"><input id="search" class="search" type="search" placeholder="Filter by name" aria-label="Filter by name" value="' + esc(state.query) + '"><div class="toolbar-actions"><button type="button" class="ghost" data-act="select-mode">Select</button><button type="button" class="ghost" data-act="start">Start</button><button type="button" class="ghost" data-act="stop">Stop</button><button type="button" class="ghost" data-act="verify">Verify</button><button type="button" class="ghost" data-act="remove">Remove</button><button type="button" class="ghost" data-act="more">More</button><button type="button" class="ghost" data-act="lock">Lock</button><button type="button" class="primary" data-act="add">Add</button></div></div><div id="banner" class="banner" hidden></div><div id="list-scroll" class="scroller"></div></div><aside id="inspector" class="inspector" aria-label="Torrent"></aside><nav class="tabbar" aria-label="Sections"><button type="button" class="bar-btn" data-act="view" data-view="torrents">Torrents</button><button type="button" class="bar-btn" data-act="view" data-view="activity">Activity</button><button type="button" class="bar-btn" data-act="view" data-view="settings">Settings</button></nav></div><div id="dialog-root"></div><div id="menu" class="menu" role="menu" hidden></div><div id="tip" class="tip" role="tooltip" hidden></div>';
+    return '<div id="shell" class="shell"><aside class="sidebar"><div class="brand">' + markSvg() + '<div class="brand-copy"><div class="brand-name clip" data-brand data-full="' + esc(state.title) + '">' + esc(state.title) + '</div><div class="host clip" data-full="' + esc(location.host) + '">' + esc(location.host) + '</div></div></div><nav class="nav" aria-label="Sections"><button type="button" class="nav-btn" data-act="view" data-view="torrents">Torrents</button><button type="button" class="nav-btn" data-act="view" data-view="activity">Activity</button><button type="button" class="nav-btn" data-act="view" data-view="settings">Settings</button></nav><div class="filters" aria-label="Filters">' + filterButtons("filter-btn") + '</div><div class="speeds"><div><span>Down</span><strong class="slot" data-speed="down"></strong></div><div><span>Up</span><strong class="slot" data-speed="up"></strong></div></div></aside><div class="workspace"><header class="phone-head"><div class="brand">' + markSvg() + '<div class="brand-copy"><div class="brand-name clip" data-brand data-full="' + esc(state.title) + '">' + esc(state.title) + '</div><div class="host clip" data-full="' + esc(location.host) + '">' + esc(location.host) + '</div></div></div><div class="speeds"><div><span>Down</span><strong data-speed="down"></strong></div><div><span>Up</span><strong data-speed="up"></strong></div></div></header><div class="chips" aria-label="Library">' + filterButtons("chip") + '</div><div class="toolbar"><input id="search" class="search" type="search" placeholder="Filter by name" aria-label="Filter by name" value="' + esc(state.query) + '"><button type="button" class="primary" data-act="add">Add</button></div><div id="banner" class="banner" hidden></div><div id="list-scroll" class="scroller"></div><div id="select-banner" class="select-banner" hidden></div></div><aside id="inspector" class="inspector" aria-label="Torrent"></aside><nav class="tabbar" aria-label="Sections"><button type="button" class="bar-btn" data-act="view" data-view="torrents">Torrents</button><button type="button" class="bar-btn" data-act="view" data-view="activity">Activity</button><button type="button" class="bar-btn" data-act="view" data-view="settings">Settings</button></nav></div><div id="dialog-root"></div><div id="menu" class="menu" role="menu" hidden></div><div id="tip" class="tip" role="tooltip" hidden></div>';
   }
   function applyLibraryTorrent(torrent) {
     if (!state.detail || state.detail.id !== torrent.id) return;
@@ -464,7 +540,8 @@
     var selected = state.selected.has(torrent.id);
     var fraction = shownFraction(torrent);
     var check = '<span class="check-col"><input type="checkbox" data-check="' + torrent.id + '"' + (selected ? " checked" : "") + ' aria-label="Select ' + esc(torrent.name) + '"></span>';
-    return '<div class="row' + (selected ? " selected" : "") + '" data-id="' + torrent.id + '" role="row" aria-selected="' + selected + '">' + check + '<div class="card-body"><div class="name clip" data-full="' + esc(torrent.name) + '">' + esc(torrent.name) + '</div><div class="sub clip' + (torrent.error_string ? " error" : "") + '" data-full="' + esc(subText(torrent)) + '">' + esc(subText(torrent)) + '</div><div class="card-meta"><span>Size <b>' + esc(Twui.formatBytes(torrent.total_size, state.units)) + '</b></span><span>Down <b>' + esc(Twui.formatSpeed(torrent.rate_download, state.units)) + '</b></span><span>Up <b>' + esc(Twui.formatSpeed(torrent.rate_upload, state.units)) + '</b></span><span>ETA <b>' + esc(Twui.formatDuration(torrent.eta)) + '</b></span><span>Ratio <b>' + esc(Twui.formatRatio(torrent.upload_ratio)) + '</b></span></div></div><div class="progress-cell"><span class="' + barClass(torrent) + '" data-live-progress><span style="width:' + progressWidth(fraction) + '"></span></span><span class="pct" data-live-percent>' + esc(Twui.formatPercent(fraction)) + '</span></div><div class="num">' + esc(Twui.formatBytes(torrent.total_size, state.units)) + '</div><div class="num">' + esc(Twui.formatSpeed(torrent.rate_download, state.units)) + '</div><div class="num">' + esc(Twui.formatSpeed(torrent.rate_upload, state.units)) + '</div><div class="num">' + esc(Twui.formatDuration(torrent.eta)) + '</div><div class="num">' + esc(Twui.formatRatio(torrent.upload_ratio)) + '</div></div>';
+    var complete = torrentComplete(torrent) ? " complete" : "";
+    return '<div class="row' + (selected ? " selected" : "") + complete + '" data-id="' + torrent.id + '" role="row" aria-selected="' + selected + '">' + check + '<div class="card-body"><div class="name clip" data-full="' + esc(torrent.name) + '">' + esc(torrent.name) + '</div><div class="sub clip' + (torrent.error_string ? " error" : "") + '" data-full="' + esc(subText(torrent)) + '">' + esc(subText(torrent)) + '</div><div class="card-meta"><span>Size <b>' + esc(Twui.formatBytes(torrent.total_size, state.units)) + '</b></span><span>Down <b>' + esc(Twui.formatSpeed(torrent.rate_download, state.units)) + '</b></span><span>Up <b>' + esc(Twui.formatSpeed(torrent.rate_upload, state.units)) + '</b></span><span>ETA <b>' + esc(Twui.formatDuration(torrent.eta)) + '</b></span><span>Ratio <b>' + esc(Twui.formatRatio(torrent.upload_ratio)) + '</b></span></div></div><div class="num">' + esc(Twui.formatBytes(torrent.total_size, state.units)) + '</div><div class="num">' + esc(Twui.formatSpeed(torrent.rate_download, state.units)) + '</div><div class="num">' + esc(Twui.formatSpeed(torrent.rate_upload, state.units)) + '</div><div class="num">' + esc(Twui.formatDuration(torrent.eta)) + '</div><div class="num">' + esc(Twui.formatRatio(torrent.upload_ratio)) + '</div><div class="progress-cell"><span class="' + barClass(torrent) + '" data-live-progress><span style="width:' + progressWidth(fraction) + '"></span></span><span class="pct" data-live-percent>' + esc(progressText(fraction)) + '</span></div></div>';
   }
   function listHtml() {
     if (!state.loaded) {
@@ -477,7 +554,7 @@
       var empty = !state.torrents.length && state.filter === "all" && !state.query.trim();
       return '<div class="note"><p>' + (empty ? "No torrents yet" : "Nothing in this filter") + '</p><button type="button" class="primary" data-act="' + (empty ? "add" : "filter") + '"' + (empty ? "" : ' data-filter="all"') + '>' + (empty ? "Add" : "Show all") + '</button></div>';
     }
-    var head = '<div class="head-row" role="row"><button type="button" class="left" data-act="sort" data-sort="name">Name</button><button type="button" data-act="sort" data-sort="percent_done">Progress</button><button type="button" class="num" data-act="sort" data-sort="total_size">Size</button><button type="button" class="num" data-act="sort" data-sort="rate_download">Down</button><button type="button" class="num" data-act="sort" data-sort="rate_upload">Up</button><button type="button" class="num" data-act="sort" data-sort="eta">ETA</button><button type="button" class="num" data-act="sort" data-sort="upload_ratio">Ratio</button></div>';
+    var head = '<div class="head-row" role="row"><div class="head-main"><button type="button" class="left" data-act="sort" data-sort="name">Name</button><button type="button" class="left" data-act="sort" data-sort="percent_done">Progress</button></div><button type="button" class="num" data-act="sort" data-sort="total_size">Size</button><button type="button" class="num" data-act="sort" data-sort="rate_download">Down</button><button type="button" class="num" data-act="sort" data-sort="rate_upload">Up</button><button type="button" class="num" data-act="sort" data-sort="eta">ETA</button><button type="button" class="num" data-act="sort" data-sort="upload_ratio">Ratio</button></div>';
     return head + rows.map(rowHtml).join("");
   }
 
@@ -489,7 +566,7 @@
     var tabs = ["overview", "files", "peers", "trackers"].map(function (tab) {
       return '<button type="button" class="tab' + (state.tab === tab ? " active" : "") + '" data-act="tab" data-tab="' + tab + '">' + tab.charAt(0).toUpperCase() + tab.slice(1) + '</button>';
     }).join("");
-    return '<div class="inspector-head"><button type="button" class="ghost" data-act="back">Back</button><h2 class="clip" data-full="' + esc(name) + '">' + esc(name) + '</h2><button type="button" class="icon-btn inspector-close" data-act="close-inspector" aria-label="Close"><svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M4 4l8 8M12 4l-8 8" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></button></div><div class="inspector-actions"><button type="button" class="ghost" data-act="start">Start</button><button type="button" class="ghost" data-act="stop">Stop</button><button type="button" class="ghost" data-act="verify">Verify</button><button type="button" class="ghost" data-act="remove">Remove</button><button type="button" class="ghost" data-act="more">More</button></div><div class="tabs" role="tablist">' + tabs + '</div><div class="inspector-body">' + inspectorBody(detail) + '</div>';
+    return '<div class="inspector-head"><h2 class="clip" data-full="' + esc(name) + '">' + esc(name) + '</h2><button type="button" class="icon-btn inspector-close" data-act="close-inspector" aria-label="Close"><svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M4 4l8 8M12 4l-8 8" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></button></div><div class="inspector-actions"><button type="button" class="ghost" data-act="start">Start</button><button type="button" class="ghost" data-act="stop">Stop</button><button type="button" class="ghost" data-act="verify">Verify</button><button type="button" class="ghost" data-act="remove">Remove</button><button type="button" class="ghost" data-act="more">More</button></div><div class="tabs" role="tablist">' + tabs + '</div><div class="inspector-body">' + inspectorBody(detail) + '</div>';
   }
   function inspectorBody(detail) {
     if (state.tab === "files") return filesHtml(detail);
@@ -524,9 +601,9 @@
     var fraction = shownFraction(detail);
     var held = haveBytes(detail);
     var haveLabel = Twui.formatBytes(held.total, state.units);
-    if (held.unchecked > 0) haveLabel += " (" + Twui.formatBytes(held.unchecked, state.units) + " not yet checked)";
-    var progress = '<div class="inspector-progress"><span class="bar" data-live-progress><span style="width:' + progressWidth(fraction) + '"></span></span><span class="pct" data-live-percent>' + esc(Twui.formatPercent(fraction)) + '</span></div>';
-    var pieces = detail.piece_count ? '<canvas class="pieces" aria-label="' + esc(pieceLabel(detail)) + '"></canvas><p class="note" data-live-pieces>' + esc(pieceLabel(detail)) + '</p>' : "";
+    var progress = '<div class="inspector-progress"><span class="' + barClass(detail) + '" data-live-progress><span style="width:' + progressWidth(fraction) + '"></span></span><span class="pct" data-live-percent>' + esc(progressText(fraction)) + '</span></div>';
+    var legend = '<p class="piece-key"><span><i class="piece-missing"></i>Not downloaded</span><span><i class="piece-unavailable"></i>Not available</span><span><i class="piece-active"></i>Downloading</span><span><i class="piece-have"></i>Downloaded</span></p>';
+    var pieces = detail.piece_count ? '<canvas class="pieces" aria-label="' + esc(pieceLabel(detail)) + '"></canvas>' + legend + '<p class="note" data-live-pieces>' + esc(pieceLabel(detail)) + '</p>' : "";
     return progress + '<div class="stats">' + stat("Down", Twui.formatSpeed(detail.rate_download, state.units)) + stat("Up", Twui.formatSpeed(detail.rate_upload, state.units)) + stat("ETA", Twui.formatDuration(detail.eta)) + stat("Ratio", Twui.formatRatio(detail.upload_ratio)) + stat("Size", Twui.formatBytes(detail.size_when_done, state.units)) + stat("Have", haveLabel) + stat("Remaining", Twui.formatBytes(detail.left_until_done, state.units)) + stat("Downloaded", Twui.formatBytes(detail.downloaded_ever, state.units)) + stat("Uploaded", Twui.formatBytes(detail.uploaded_ever, state.units)) + stat("Location", detail.download_dir || "") + stat("Hash", detail.hash_string || "") + stat("Privacy", detail.is_private ? "Private" : "Public") + stat("Peers", Twui.formatCount(detail.peers_connected)) + stat("Queue", Twui.formatCount(detail.queue_position)) + "</div>" + (detail.status === 1 || detail.status === 2 ? '<p>Verifying ' + esc(Twui.formatPercent(detail.recheck_progress)) + '</p>' : "") + pieces + controls + (detail.comment ? '<p class="clip" data-full="' + esc(detail.comment) + '">' + esc(detail.comment) + '</p>' : "");
   }
   function checkTorrent(key, label, checked) {
@@ -704,7 +781,7 @@
       if (section.id === "connections") body += '<div class="toolbar-actions"><button type="button" class="ghost" data-act="port" data-protocol="ipv4">Test IPv4</button><button type="button" class="ghost" data-act="port" data-protocol="ipv6">Test IPv6</button></div><p class="note">' + esc(state.portResult) + "</p>";
       if (section.id === "blocklist") body += '<p class="note">' + Twui.formatCount(state.session.blocklist_size || 0) + ' rules. ' + esc(state.blocklistNote) + '</p><button type="button" class="primary" data-act="blocklist">Update blocklist</button>';
     }
-    return nav + body + '<div class="version"><button type="button" class="danger" data-act="shutdown">Shut down Transmission</button></div>';
+    return nav + body;
   }
   function groupsHtml() {
     if (!state.groupsTried) return "<p class='note'>Reading groups…</p>";
@@ -788,6 +865,7 @@
     paintCounts();
     paintSpeeds();
     paintBanner();
+    paintSelectBanner();
     paintActionState();
     var main = document.querySelector(".workspace");
     if (main) main.setAttribute("aria-busy", state.loaded ? "false" : "true");
@@ -1112,16 +1190,36 @@
     openDialog('<h2>Rename</h2><label class="field">Name<input id="rename-name" type="text" value="' + esc(current) + '"></label><div class="dialog-actions"><button type="button" class="ghost" data-act="close">Cancel</button><button type="button" class="primary" data-act="rename-save" data-id="' + id + '" data-path="' + esc(path) + '">Rename</button></div>', "#rename-name");
   }
   function menuHtml() {
-    var single = state.menuIds && state.menuIds.length === 1;
+    var ids = state.menuIds || [];
+    var single = ids.length === 1;
+    var inSelection = state.selectMode && ids.length > 0 && ids.every(function (id) { return state.selected.has(id); });
     var items = [["start", "Start"], ["stop", "Stop"], ["start-now", "Start now"], ["verify", "Verify"], ["reannounce", "Reannounce"], ["rename-torrent", "Rename"], ["location", "Set location"], ["queue-top", "Move to top"], ["queue-up", "Move up"], ["queue-down", "Move down"], ["queue-bottom", "Move to bottom"], ["remove", "Remove"]];
-    return items.map(function (item) {
+    var offerSelect = state.menuOfferSelect !== false && !inSelection;
+    var select = offerSelect ? '<button type="button" role="menuitem" data-act="select-row">Select</button><div class="menu-rule"></div>' : "";
+    return select + items.map(function (item) {
       var disabled = state.pendingAction === item[0] || (item[0] === "rename-torrent" && !single) ? " disabled" : "";
       return '<button type="button" role="menuitem" data-act="' + item[0] + '"' + disabled + ">" + item[1] + "</button>";
     }).join("");
   }
-  function openMenu(x, y, ids) {
+  function paintSelectBanner() {
+    var banner = document.getElementById("select-banner");
+    if (!banner) return;
+    var show = state.selectMode && state.view === "torrents";
+    banner.hidden = !show;
+    if (!show) return;
+    var count = state.selected.size;
+    var label = count === 1 ? "1 torrent selected" : Twui.formatCount(count) + " torrents selected";
+    var text = banner.querySelector("span");
+    if (!text || !banner.querySelector('[data-act="select-mode"]')) {
+      banner.innerHTML = '<span>' + label + '</span><button type="button" class="icon-btn select-exit" data-act="select-mode" aria-label="Exit selection"><svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M4 4l8 8M12 4l-8 8" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></button>';
+      return;
+    }
+    text.textContent = label;
+  }
+  function openMenu(x, y, ids, offerSelect) {
     state.menuOpenedAt = Date.now();
     state.menuIds = ids;
+    state.menuOfferSelect = offerSelect !== false;
     var menu = document.getElementById("menu");
     if (!menu) return;
     menu.innerHTML = menuHtml();
@@ -1178,12 +1276,12 @@
       suppressClick = false;
       return;
     }
+    if (state.selectMode || event.target.matches("[data-check]")) {
+      toggleSelected(id);
+      paintLive();
+      return;
+    }
     if (!Twui.wide.matches) {
-      if (state.selectMode || event.target.matches("[data-check]")) {
-        toggleSelected(id);
-        paintLive();
-        return;
-      }
       var scroller = document.getElementById("list-scroll");
       state.listScroll = scroller ? scroller.scrollTop : 0;
       selectOnly(id);
@@ -1269,6 +1367,19 @@
     if (name === "select-mode") {
       state.selectMode = !state.selectMode;
       if (!state.selectMode) state.selected = new Set();
+      closeMenu();
+      paintLive();
+      return;
+    }
+    if (name === "select-row") {
+      var picked = (state.menuIds || []).slice();
+      if (!state.selectMode && picked.length < 2) state.selected = new Set();
+      state.selectMode = true;
+      picked.forEach(function (id) {
+        state.selected.add(id);
+        state.anchor = id;
+      });
+      closeMenu();
       paintLive();
       return;
     }
@@ -1276,7 +1387,7 @@
       var rect = act.getBoundingClientRect();
       var ids = selectedIds();
       if (!ids.length && onlyId() != null) ids = [onlyId()];
-      openMenu(rect.left, rect.bottom + 4, ids);
+      openMenu(rect.left, rect.bottom + 4, ids, !act.closest(".inspector"));
       return;
     }
     if (name === "close-inspector") {
@@ -1397,24 +1508,6 @@
         paintLive();
       });
       return;
-    }
-    if (name === "shutdown") {
-      openDialog("<h2>Shut down " + esc(location.host) + '?</h2><p>Transmission will stop until it is started again.</p><div class="dialog-actions"><button type="button" class="ghost" data-act="close">Cancel</button><button type="button" class="danger" data-act="shutdown-confirm">Shut down</button></div>', "[data-act='close']");
-      return;
-    }
-    if (name === "shutdown-confirm") {
-      closeDialog();
-      Twui.rpc("session_close", {}).then(function () {
-        stopPoll();
-        state.mode = "unreachable";
-        state.actionError = "";
-        paintRoot();
-        var note = document.querySelector(".gate p");
-        if (note) note.textContent = "The daemon is shutting down.";
-      }, function (error) {
-        state.actionError = error.message;
-        paintBanner();
-      });
     }
   }
 
@@ -1644,6 +1737,6 @@
   Twui.fine = window.matchMedia("(hover: hover) and (pointer: fine)");
   Twui.wide.addEventListener("change", function () { if (state.mode === "live") paintLive(); });
 
-  if ("serviceWorker" in navigator) navigator.serviceWorker.register(location.origin + "/transmission/web/sw.js?v0.0.4").catch(function () {});
+  if ("serviceWorker" in navigator) navigator.serviceWorker.register(location.origin + "/transmission/web/sw.js?v0.0.14").catch(function () {});
   probe();
 })();
