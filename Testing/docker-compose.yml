@@ -1,0 +1,29 @@
+services:
+  transmission:
+    image: lscr.io/linuxserver/transmission:latest
+    container_name: transmission-webui-test
+    hostname: transmission-webui-test
+    user: "501:20"
+    environment:
+      - PUID=501
+      - PGID=20
+      - TZ=Europe/London
+      - UMASK=077
+      - TRANSMISSION_WEB_HOME=/webui
+      - USER=steve
+      - PASS=test-password
+    volumes:
+      - transmission_config:/config
+      - transmission_downloads:/downloads
+      - transmission_watch:/watch
+      - ./webui-test:/webui
+    ports:
+      - 9091:9091
+      - 51413:51413
+      - 51413:51413/udp
+    restart: unless-stopped
+
+volumes:
+  transmission_config:
+  transmission_downloads:
+  transmission_watch:

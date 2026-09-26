@@ -4,19 +4,22 @@ A browser interface for a Transmission daemon. Several daemons can run at once. 
 
 This document is the design. It is not an implementation. The pictures are mockups of the default teal theme, filled with sample torrents so the layout can be judged.
 
-Target daemon: Transmission 4.0 or newer. The wire protocol is the bespoke RPC described in the [Transmission 4.0.6 RPC specification](https://github.com/transmission/transmission/blob/4.0.6/docs/rpc-spec.md): a JSON body with `method`, `arguments`, and `tag`, kebab-case method names, and the historical camelCase torrent fields. Transmission 4.1 also accepts a JSON-RPC 2.0 dialect with snake_case names. This interface speaks the bespoke dialect, which current Transmission 4 releases still accept, and which is the contract named below (`torrent-get`, `percentDone`, and the rest).
+Target daemon: Transmission 4.1 or newer. The current release this design is written against is 4.1.3. The wire protocol is JSON-RPC 2.0, as specified for that release in the [Transmission 4.1.3 RPC specification](https://github.com/transmission/transmission/blob/4.1.3/docs/rpc-spec.md). Methods and fields are snake_case (`torrent_get`, `percent_done`). The older bespoke protocol is deprecated and this interface does not speak it. On unlock, `session_get` must report `rpc_version_semver` of `6.0.0` or newer (Transmission 4.1.0). An older daemon gets a blocking message and no library.
 
 ## 1. What it has to do
 
 - Sign-in uses Transmission’s RPC username and password. The interface stores no password of its own.
 - Every call is an HTTP POST to `/transmission/rpc`.
 - A `409` response yields a new `X-Transmission-Session-Id`. The client stores that value and sends the same request again with the header set.
-- While the library is open, the client polls `torrent-get` every 2 seconds for `id`, `name`, `status`, `percentDone`, `rateDownload`, `rateUpload`, `eta`, `totalSize`, `uploadRatio`, and `errorString`.
+- While the library is open, the client polls `torrent_get` every 2 seconds for `id`, `name`, `status`, `percent_done`, `rate_download`, `rate_upload`, `eta`, `total_size`, `upload_ratio`, and `error_string`.
 - The same screen manages the session: add, start, stop, verify, reannounce, queue, files, peers, trackers, labels, speed limits, and the rest of the session settings Transmission exposes.
-- The chrome is hues of one colour, including the favicon. Each Transmission instance has its own colour, so tabs, icons, and installed apps are easy to tell apart. Settings on that instance chooses the colour, and light, dark, or match the system.
+- The chrome is hues of one colour, including the favicon. Each Transmission instance has its own colour and its own page title, stored for that instance and applied on the next open or refresh. Light, dark, or system stays on the device.
 - Torrent status, speeds, and session facts are whatever Transmission last reported. A setting changes on screen only after the daemon accepts it and a follow-up read returns the new value.
 - The shell is laid out with CSS flex and grid.
-- The page is installable as a PWA.
+- The page is a full-screen PWA. The document does not scroll. Scrolling happens inside the list, the inspector, settings, and menus.
+- The interface has its own semantic version, shown in the product and used as `?vX.Y.Z` on every static file.
+- Displayed values are human-readable. An unknown estimate is shown as ∞.
+- Right-click and long-press open the action menu. Several torrents can be selected and started, stopped, or removed together.
 - The same information is usable with a mouse on a wide window and with a thumb on a phone.
 - Interface copy uses British spelling. RPC field names stay as Transmission spells them.
 
@@ -30,14 +33,14 @@ flowchart LR
     d2[Daemon B]
   end
   nginx[nginx]
-  person -->|localhost and the daemon port| d1
-  person -->|localhost and the daemon port| d2
-  person -->|remote hostname| nginx
+  person -->|hostname and port| d1
+  person -->|hostname and port| d2
+  person -->|your domain| nginx
   nginx -->|one hostname each| d1
   nginx -->|one hostname each| d2
 ```
 
-Each daemon serves the same interface from its own `TRANSMISSION_WEB_HOME`. The page and `/transmission/rpc` for that daemon share an origin. Script can read `X-Transmission-Session-Id` on that origin. A page loaded from one instance never calls another instance’s RPC.
+Each daemon serves the same interface from its own `TRANSMISSION_WEB_HOME`. Locally that is a hostname and the daemon’s port. Remotely it is a hostname on your own domain, with nginx in front. The page and `/transmission/rpc` for that daemon share an origin. Script can read `X-Transmission-Session-Id` on that origin. A page loaded from one instance never calls another instance’s RPC.
 
 ```mermaid
 flowchart TB
@@ -59,93 +62,144 @@ There is no application backend. Credentials, the session id, and the torrent li
 
 ## 3. Hosting
 
-The interface is always served by Transmission from `TRANSMISSION_WEB_HOME`. nginx does not keep a copy of the files. It reverse-proxies remote access to the daemon that owns that hostname.
+The interface is always served by Transmission from `TRANSMISSION_WEB_HOME`. nginx does not keep a second copy of the HTML, CSS, or scripts. It reverse-proxies remote access to the daemon that owns that hostname, and it is the process that stores `instance.json` when the colour or title is saved (section 12).
 
-Build output is a directory of static files: HTML, CSS, JavaScript, the manifest, and the service worker. Copy that directory to each daemon’s `TRANSMISSION_WEB_HOME`. Several daemons may share one read-only copy of the directory. Each process still has its own port, config directory, RPC password, and whitelist.
+Two directories in this project:
+
+| Directory | Role |
+|---|---|
+| `Testing/webui-test` | The files the test daemon serves. Copy the interface here while testing. |
+| `Deployment/webui` | The files to install. Copy this directory into each daemon’s `TRANSMISSION_WEB_HOME`. |
+
+The test stack is `Testing/docker-compose.yml`. It runs the linuxserver Transmission image with `TRANSMISSION_WEB_HOME=/webui`, bind-mounts `./webui-test` at `/webui`, and publishes port 9091. Open it at `http://<hostname>:9091/transmission/web/`. The RPC password is the one in that compose file. This document does not repeat it.
+
+Local access is `http://<hostname>:<port>/transmission/web/`. Remote access is `https://<name>.<your-domain>/transmission/web/` through nginx. Each instance is its own origin, so the HTTP password cache, the installed app, the colour, and the title stay separate. A shared hostname would mix them.
 
 Transmission then serves:
 
 | Path | What it is |
 |---|---|
 | `/transmission/web/` | This interface |
+| `/transmission/web/instance.json` | This instance’s colour and title |
 | `/transmission/rpc` | That daemon’s RPC |
 
-The client calls the absolute path `/transmission/rpc`. From a page at `/transmission/web/`, that path is the same host, so it reaches the daemon which served the page. Locally that host is `127.0.0.1` and the daemon’s port. Remotely it is the public hostname nginx sends to that daemon.
+The client calls the absolute path `/transmission/rpc`. From a page at `/transmission/web/`, that path is the same host.
 
-Give every instance its own public hostname. A shared hostname would share the HTTP password cache, `localStorage`, and the installed PWA, and the colours would no longer separate the instances.
+### Interface version
+
+The interface has one semantic version, a constant such as `1.0.0`. Settings shows it as “Interface 1.0.0”. The same string is the cache-busting query on every static file: `app.css?v1.0.0`, `app.js?v1.0.0`, `manifest.webmanifest?v1.0.0`, icon URLs, and `sw.js?v1.0.0`. The HTML links use that query. Raising the constant changes every URL, and the service worker drops the previous cache when it activates. `instance.json` is not versioned this way. It is always fetched with `cache: "no-store"`.
+
+### nginx
+
+One server block per instance. The names below are placeholders. Use your LAN hostname and the names on your domain. Terminate TLS on nginx for remote access. `ngx_http_dav_module` and `ngx_http_auth_request_module` are required for the preferences file.
 
 ```nginx
 server {
   listen 443 ssl;
   server_name media.example;
 
+  client_max_body_size 16m;
+
   add_header Content-Security-Policy "default-src 'self'; connect-src 'self'; style-src 'self'; script-src 'self'; manifest-src 'self'; img-src 'self' data: blob:; worker-src 'self'; base-uri 'none'; form-action 'none'" always;
 
-  location /transmission/ {
-    proxy_pass http://127.0.0.1:9091;
+  location = /_transmission_auth {
+    internal;
+    proxy_pass http://127.0.0.1:9091/transmission/web/;
+    proxy_http_version 1.1;
+    proxy_set_header Connection "";
+    proxy_pass_request_body off;
+    proxy_set_header Content-Length "";
     proxy_set_header Host $host;
     proxy_set_header Authorization $http_authorization;
   }
-}
 
-server {
-  listen 443 ssl;
-  server_name archive.example;
-
-  add_header Content-Security-Policy "default-src 'self'; connect-src 'self'; style-src 'self'; script-src 'self'; manifest-src 'self'; img-src 'self' data: blob:; worker-src 'self'; base-uri 'none'; form-action 'none'" always;
+  location = /transmission/web/instance.json {
+    alias /srv/transmission/media/web/instance.json;
+    dav_methods PUT;
+    create_full_put_path on;
+    client_max_body_size 16k;
+    limit_except GET HEAD PUT { deny all; }
+    auth_request /_transmission_auth;
+    add_header Cache-Control "no-store" always;
+  }
 
   location /transmission/ {
-    proxy_pass http://127.0.0.1:9092;
+    proxy_pass http://127.0.0.1:9091;
+    proxy_http_version 1.1;
+    proxy_set_header Connection "";
     proxy_set_header Host $host;
     proxy_set_header Authorization $http_authorization;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_set_header X-Forwarded-Host $host;
+    proxy_set_header X-Transmission-Session-Id $http_x_transmission_session_id;
+    proxy_pass_header X-Transmission-Session-Id;
+    proxy_pass_header X-Transmission-Rpc-Version;
   }
 }
 ```
 
-`proxy_pass` has no URI path of its own, so `/transmission/web/` and `/transmission/rpc` reach that daemon unchanged. nginx forwards `Authorization` and `401` responses, including `WWW-Authenticate`. It does not answer the password challenge and it does not insert a password.
+A second instance repeats the server with its own `server_name`, upstream port, and `alias`. The alias path is that daemon’s web home plus `instance.json`. In the test stack the file on the host is `Testing/webui-test/instance.json`. In deployment it is `Deployment/webui/instance.json` once that directory is `TRANSMISSION_WEB_HOME`.
 
-The `Host` value that reaches a daemon must be on that daemon’s `rpc-host-whitelist`. Localhost and IP addresses are already allowed, which covers direct local use. Add each public hostname to the whitelist of the daemon it proxies to.
+`proxy_pass` has no URI path of its own, so `/transmission/web/` and `/transmission/rpc` reach the daemon unchanged. The extra headers are there because Transmission checks them:
 
-Terminate TLS on nginx for remote access. The password travels as HTTP Basic.
+| Header | Why it is set |
+|---|---|
+| `Host` | `rpc_host_whitelist` compares this value. Transmission strips the port. |
+| `Authorization` | Forwards the browser’s Basic credentials. nginx does not add a password and does not answer `401`. `WWW-Authenticate` is passed back. |
+| `X-Transmission-Session-Id` | The browser sends the CSRF token on RPC. Without this line nginx drops it and every call stays on `409`. |
+| `proxy_pass_header X-Transmission-Session-Id` | The `409` response carries the new token. It has to reach the browser. |
+| `X-Transmission-Rpc-Version` | Present on `409` from Transmission 4.1 onwards. Passed back the same way. |
+| `X-Real-IP`, `X-Forwarded-For`, `X-Forwarded-Proto`, `X-Forwarded-Host` | The daemon sees the browser’s address and scheme. |
+| `Connection ""` with `proxy_http_version 1.1` | Drops the browser’s hop-by-hop `Connection` header. |
 
-The palette script in the document head runs before the first paint and applies the colour saved for this origin.
+`client_max_body_size 16m` leaves room for a `.torrent` file sent as base64 `metainfo`. Raise it if a larger file is rejected.
+
+The `Host` value that reaches a daemon must be on that daemon’s `rpc_host_whitelist`. Localhost and IP addresses are already allowed, which covers opening the daemon port directly. Add each public hostname to the whitelist of the daemon it proxies to.
+
+Local use is a hostname and port. In the test stack that is port 9091 on the daemon, which serves the UI, RPC, and `GET` of `instance.json`. Remote use is nginx on your domain.
+
+Saving colour or title is `PUT /transmission/web/instance.json`. Transmission serves files from the web home and does not store a PUT body, so the nginx `location` above is what writes the file. The hostname:port used to change colour or title is an nginx listener with that same location, proxying every other `/transmission/` URL to the daemon. A repeat of the server block with `listen 8080` and `server_name` set to the LAN hostname does this in front of port 9091. After a save, `instance.json` in the web home holds the new values, and the next open or refresh — on `:9091` or on the domain — reads them.
+
+The document head paints the default teal before `instance.json` returns, so the first frame has a colour. The title occupies a fixed-height placeholder until that file arrives.
 
 ## 4. Signing in
 
 Transmission checks the password. The page does not keep a second one, and it does not read `settings.json`.
 
-The password Transmission expects is the plaintext configured as `rpc-password`, sent with the username from `rpc-username`. Transmission stores only a hash of that password. The page never sees the hash. Each daemon has its own username and password. Signing in to one instance does not sign in to another, because each public hostname is its own origin, and each local port is its own origin too.
+The password Transmission expects is the plaintext configured as `rpc-password`, sent with the username from `rpc-username`. Transmission stores only a hash of that password. The page never sees the hash. Each daemon has its own username and password. Signing in to one instance does not sign in to another, because each hostname, and each hostname with its port, is its own origin.
 
 Because the daemon serves the files, `rpc-authentication-required` applies to `/transmission/web/` as well as `/transmission/rpc`. The browser’s sign-in dialogue is the first gate, locally and through nginx. The document does not load until Transmission accepts the password. RPC calls use the browser’s cached credentials for that origin (`fetch` credentials stay `same-origin`). The page sends an explicit `Authorization` header when the person has just typed the password into the lock screen, so that typed password is the one checked.
 
-On load, before any torrent data is drawn, the client probes `session-get` with `credentials: 'omit'`, so the browser does not attach the password it used to load the page. That is how the page tells a daemon that requires a password from one that does not.
+On load, before any torrent data is drawn, the client probes `session_get` with `credentials: 'omit'`, so the browser does not attach the password it used to load the page. That is how the page tells a daemon that requires a password from one that does not.
 
 | First probe, credentials omitted | What the page does |
 |---|---|
-| `401`, including after the `409` retry | Authentication is on. Keep the session id. Send `session-get` again with `credentials: 'same-origin'`. |
-| `200` with `result: "success"` | Authentication is off. Show a blocking explanation: turn on RPC authentication in Transmission, then reload. Do not draw the library. |
+| `401`, including after the `409` retry | Authentication is on. Keep the session id. Send `session_get` again with `credentials: 'same-origin'`. |
+| `200` with a `result` object | Authentication is off. Show a blocking explanation: turn on RPC authentication in Transmission, then reload. Do not draw the library. |
 | Network error or HTTP 5xx | Show “Transmission did not respond” and a way to try the probe again. |
 
 | Second probe, browser credentials included | What the page does |
 |---|---|
-| `200` with `result: "success"` | The browser’s password was accepted. Open the library. Do not show the lock screen. |
+| `200` with a `result` object | The browser’s password was accepted. Open the library. Do not show the lock screen. |
 | `401` | Show the lock screen for this instance. |
 
 The lock screen asks for the username and password of this instance. The username may be saved in `localStorage` under `twui.username` for this origin only. The password is held in memory for the tab and is cleared on lock, on `401`, and when the tab closes. It is never written to `localStorage`, `sessionStorage`, the URL, or a log.
 
 A normal visit therefore asks once, in the browser dialogue, and then opens the library in this instance’s colour. Lock, in the toolbar, hides the library and shows the form. The next RPC call waits until that form is submitted with an explicit `Authorization` header.
 
-Submitting the form calls `session-get` with `Authorization: Basic …`. The value is the base64 of the UTF-8 bytes of `username:password`, not the result of `btoa` on a JavaScript string that may contain characters outside Latin-1.
+Submitting the form calls `session_get` with `Authorization: Basic …`. The value is the base64 of the UTF-8 bytes of `username:password`, not the result of `btoa` on a JavaScript string that may contain characters outside Latin-1.
 
 | Unlock result | What the page does |
 |---|---|
-| `200` and `result: "success"` | Open the library and start polling. |
+| `200` and a `result` object | Open the library and start polling, after the version check below. |
 | `401` | Stay on the lock screen. Clear the password field. Say that Transmission did not accept the password. |
 | `409` | Store the new session id and retry this call once. |
 
 A later `401` on any call, including a poll, clears the in-memory list and returns to the lock screen. Lock, in the toolbar, does the same thing on purpose.
 
-`session-get` on unlock also records `rpc-version`. The interface expects Transmission 4 (`rpc-version` 17 or newer) so labels, bandwidth groups, and `trackerList` exist. Older daemons still get a library from the polled fields. Controls whose methods the daemon rejects are hidden after the first rejection.
+`session_get` on unlock reads `rpc_version_semver`. This interface requires `6.0.0` or newer, which is Transmission 4.1.0. An older value, or a body that is still the bespoke `{ "result": "success" }` shape, blocks the library and says this interface needs Transmission 4.1 or newer. Controls whose methods the daemon rejects are hidden after the first rejection.
 
 ```mermaid
 sequenceDiagram
@@ -163,12 +217,12 @@ sequenceDiagram
   Browser->>Edge: GET /transmission/web/ with Authorization
   Edge->>Daemon: forwarded
   Daemon-->>Browser: The interface
-  Browser->>Edge: POST /transmission/rpc session-get
+  Browser->>Edge: POST /transmission/rpc session_get
   Edge->>Daemon: forwarded
   Daemon-->>Browser: 409 and X-Transmission-Session-Id
-  Browser->>Daemon: session-get with that header
+  Browser->>Daemon: session_get with that header
   Daemon-->>Browser: 200 session
-  Browser-->>Person: Library in the colour saved for this instance
+  Browser-->>Person: Library after instance.json and the first poll
 ```
 
 ```mermaid
@@ -202,13 +256,16 @@ Authorization: Basic <credentials, omitted on the unauthenticated probe>
 
 ```json
 {
-  "method": "torrent-get",
-  "arguments": { "fields": ["id", "name"] },
-  "tag": 12
+  "jsonrpc": "2.0",
+  "method": "torrent_get",
+  "params": { "fields": ["id", "name"] },
+  "id": 12
 }
 ```
 
-A successful body has `result` equal to `"success"`, an `arguments` object, and the same `tag`. Any other `result` string is an error to show, with the daemon’s text.
+`id` is an integer the client chooses, increased for each call. A response with a different `id` is ignored. A body with no `id` is a notification and is ignored. HTTP is usually `200` for both success and RPC failure. `204` is a notification and is ignored.
+
+A success body has a `result` object. That object is the method’s return value (`torrents`, session keys, and so on). An error body has `error.code`, `error.message`, and sometimes `error.data.error_string` and `error.data.result`. Show `error.message`, and `error.data.error_string` when it is present. There is no `result: "success"` string in this protocol.
 
 ```mermaid
 flowchart TD
@@ -218,9 +275,9 @@ flowchart TD
   status{HTTP status}
   save[Store X-Transmission-Session-Id]
   once{Already retried this call?}
-  ok[Return arguments]
+  ok[Return the result object]
   lock[Clear the password and show the lock screen]
-  rpcErr[Show the result string]
+  rpcErr[Show error.message]
   down[Keep the last good data and mark reconnecting]
 
   build --> have
@@ -232,22 +289,23 @@ flowchart TD
   save --> send
   once -->|yes| down
   status -->|401| lock
-  status -->|200 and result success| ok
-  status -->|200 and other result| rpcErr
+  status -->|200 and result object| ok
+  status -->|200 and error object| rpcErr
   status -->|network or 5xx| down
 ```
 
 Rules for the `409` path:
 
 - Read `X-Transmission-Session-Id` from the response. If the header is missing, fail the call. Do not retry.
-- Replace the stored session id with that value.
-- Send the original method and arguments once more, with the header attached.
+- From `rpc_version_semver` `6.0.0` the same response also carries `X-Transmission-Rpc-Version`. Record it when it is present.
+- Replace the stored session id with the session-id header.
+- Send the original method, params, and `id` once more, with the session header attached.
 - A second `409` on that same call stops. Surface a connection error. Do not loop.
 - Parallel calls that all receive `409` may each retry once. They share the latest stored id.
 
 The client aborts a call that has not finished after 15 seconds so a stuck poll cannot pile up.
 
-Integer torrent ids are not stable across a daemon restart. The interface uses them for the life of the page. After a restart the next poll replaces the list.
+`ids` in a torrent method may be an integer, a list of ids or hashes, or the string `recently_active`. Omitting `ids` means every torrent. Integer ids are not stable across a daemon restart. The interface uses them for the life of the page. After a restart the next poll replaces the list.
 
 ## 6. Polling
 
@@ -255,11 +313,11 @@ The library poll starts as soon as unlock succeeds, then every 2 seconds. A tick
 
 Each tick does two calls:
 
-1. `torrent-get` with no `ids` (every torrent) and exactly these fields, in this order:
+1. `torrent_get` with no `ids` (every torrent) and exactly these fields, in this order:
 
-   `id`, `name`, `status`, `percentDone`, `rateDownload`, `rateUpload`, `eta`, `totalSize`, `uploadRatio`, `errorString`
+   `id`, `name`, `status`, `percent_done`, `rate_download`, `rate_upload`, `eta`, `total_size`, `upload_ratio`, `error_string`
 
-2. `session-stats`, for the speeds and totals in the sidebar and on the activity page.
+2. `session_stats`, for the speeds and totals in the sidebar and on the activity page. `session_stats` is not added to the ten library fields.
 
 The field list on call 1 does not grow. Labels, queue position, files, peers, and trackers are other calls, made for the view that shows them.
 
@@ -269,9 +327,9 @@ sequenceDiagram
   participant RPC as /transmission/rpc
 
   loop Every 2 seconds while unlocked and visible
-    UI->>RPC: torrent-get with the ten library fields
-    RPC-->>UI: arguments.torrents
-    UI->>RPC: session-stats
+    UI->>RPC: torrent_get with the ten library fields
+    RPC-->>UI: result.torrents
+    UI->>RPC: session_stats
     RPC-->>UI: speeds and totals
   end
 ```
@@ -280,26 +338,27 @@ Example library request:
 
 ```json
 {
-  "method": "torrent-get",
-  "arguments": {
+  "jsonrpc": "2.0",
+  "method": "torrent_get",
+  "params": {
     "fields": [
       "id",
       "name",
       "status",
-      "percentDone",
-      "rateDownload",
-      "rateUpload",
+      "percent_done",
+      "rate_download",
+      "rate_upload",
       "eta",
-      "totalSize",
-      "uploadRatio",
-      "errorString"
+      "total_size",
+      "upload_ratio",
+      "error_string"
     ]
   },
-  "tag": 41
+  "id": 41
 }
 ```
 
-`percentDone` is a fraction from 0 to 1. Rates are bytes per second. `totalSize` is bytes. `eta` is seconds, or `-1` when Transmission has no estimate. `errorString` is empty when there is no error.
+`percent_done` is a fraction from 0 to 1. Rates are bytes per second. `total_size` is bytes. `eta` is seconds, and any value below 0, including `-1`, means Transmission has no estimate. `error_string` is empty when there is no error. The numeric `error` field is 0 when fine, 1 for a tracker warning, 2 for a tracker error, and 3 for a local error. The library uses `error_string` for the Error filter.
 
 `status` maps to a label:
 
@@ -318,17 +377,29 @@ Other library filters, still using only the polled fields:
 | Filter | Rule |
 |---|---|
 | All | Every torrent |
-| Active | `rateDownload > 0` or `rateUpload > 0` |
-| Finished | `percentDone === 1` |
-| Error | `errorString` is not empty |
+| Active | `rate_download > 0` or `rate_upload > 0` |
+| Finished | `percent_done === 1` |
+| Error | `error_string` is not empty |
 
 A torrent can sit in both Downloading and Error. Counts are independent. Search is a case-insensitive substring of `name`, applied in the page, with no extra RPC. The default sort is by name. Column headers sort by any polled field. Sort and the current filter are remembered in `localStorage`.
 
-A rate of 0 is shown as an em dash in the table. `eta` of `-1` is shown as “Unknown”. Stopped rows use an em dash for the estimate. Ratio is shown to two decimal places. Sizes and speeds use `units` from the unlock `session-get` (`speed-bytes`, `size-bytes`, and the unit-name arrays). Until that object arrives, divide by 1000 and use B / kB / MB / GB.
+### How values are shown
 
-While the label list is on screen, a second `torrent-get` on the same 2 second tick asks only for `id` and `labels`. That call is not part of the library field list above.
+The page keeps the raw numbers from RPC. Everything drawn on screen is formatted.
 
-While exactly one torrent is open in the inspector, another `torrent-get` on the same tick asks for that id and the detail fields in section 9. A multi-selection does not fetch peers or files.
+| Value | On screen |
+|---|---|
+| Sizes, speeds, memory | `units` from the unlock `session_get`: `speed_bytes`, `size_bytes`, `memory_bytes`, and `speed_units`, `size_units`, `memory_units`. A rate of 0 is a formatted zero, such as `0 kB/s`. |
+| Before `units` has arrived | Divide by 1000 and use B, kB, MB, GB, TB. |
+| `percent_done`, `recheck_progress` | A percentage from the 0–1 fraction. |
+| `upload_ratio` | Two decimal places. |
+| `eta` and other durations | Hours and minutes, or seconds when the duration is under a minute. Any `eta` below 0 is ∞. |
+| Unix timestamps | The local date and time. |
+| Counts | Grouped digits. |
+
+While the label list is on screen, a second `torrent_get` on the same 2 second tick asks only for `id` and `labels`. That call is not part of the library field list above.
+
+While exactly one torrent is open in the inspector, another `torrent_get` on the same tick asks for that id and the detail fields in section 9. A multi-selection does not fetch peers or files.
 
 A failed tick keeps the last list on screen and shows a reconnecting state. The next tick is still 2 seconds later. `401` leaves that path and locks.
 
@@ -336,22 +407,22 @@ A failed tick keeps the last list on screen and shows a reconnecting state. The 
 
 Anything the page says about a torrent or the session comes from the latest successful RPC read. The page does not invent a status, a speed, a progress value, or an error, and it does not treat the button the person pressed as the new state.
 
-A write (`torrent-start`, `torrent-stop`, `torrent-set`, `session-set`, and the other mutators) updates the screen only after both of these are true:
+A write (`torrent_start`, `torrent_stop`, `torrent_set`, `session_set`, and the other mutators) updates the screen only after both of these are true:
 
-1. The write returns `result: "success"`.
+1. The write returns HTTP `200` and a `result` object.
 2. A follow-up read of the affected fields returns, and the screen shows those returned values.
 
-The follow-up read is `torrent-get` for torrent fields and `session-get` for session fields. Transmission may clamp or ignore a value, so the page displays what the read returns, which can differ from what was sent. Methods that return no arguments, such as `torrent-start`, still need that read: success means the command was accepted, and the next `torrent-get` is what changes the status label.
+The follow-up read is `torrent_get` for torrent fields and `session_get` for session fields. Transmission may clamp or ignore a value, so the page displays what the read returns, which can differ from what was sent. Methods whose `result` carries no torrent fields, such as `torrent_start`, still need that read: a `result` object means the command was accepted, and the next `torrent_get` is what changes the status label.
 
-Until that read arrives, the previous server values stay on screen. The control that was used can be disabled and marked pending. It does not move to the requested value early. If the write returns an error string, times out, or never gets `success`, the pending mark clears and the last accepted values remain. The error text from `result` is shown on that action.
+Until that read arrives, the previous server values stay on screen. The control that was used is disabled, so the same change cannot be sent twice. The rest of the page stays usable, including changing which torrents are selected. The control does not move to the requested value early. If the write returns an `error` object, times out, or the follow-up read fails, the control is enabled again and the last accepted values remain. The error text is shown on that action.
 
-Text fields may hold a draft while they are focused, so the person can type. The draft is not the setting. Save, or leaving the field, sends the write. When the follow-up read returns, the field shows the server value. If the write fails, the field returns to the previous server value.
+Text fields may hold a draft while they are focused, so the person can type. The draft is not the setting. Save, or leaving the field, sends the write and disables the field until the follow-up read returns. The field then shows the server value. If the write fails, the field returns to the previous server value and is enabled again.
 
-Toggles, selects, and checkboxes show the last read value the whole time. They move when the follow-up read says they moved.
+Toggles, selects, and checkboxes show the last read value the whole time. They move when the follow-up read says they moved. While one is disabled, another choice in that same control cannot be sent.
 
-These values are always a read, never a local guess: `status`, `percentDone`, rates, `eta`, `uploadRatio`, `errorString`, peer and file progress, `session-stats`, free space, `port-is-open`, and `blocklist-size`.
+These values are always a read, never a local guess: `status`, `percent_done`, rates, `eta`, `upload_ratio`, `error_string`, peer and file progress, `session_stats`, free space, `port_is_open`, and `blocklist_size`.
 
-Appearance is the exception. Transmission has no field for the base colour, so that choice applies in the page as soon as it is picked, including the favicon. It is stored for this origin only, and it is not reported as a daemon setting. The hostname shown in the sidebar is the real address of this instance, from `location.host`, not a name the person typed.
+Colour and the page title are the other case. They are not Transmission fields. They change on this page when the save of `instance.json` succeeds, and other devices see them on their next open or refresh (section 12). The hostname shown in the sidebar is the real address of this instance, from `location.host`. The page title is a label the person sets so two instances are easy to tell apart. It is not a substitute for the host.
 
 ## 8. Library
 
@@ -367,24 +438,26 @@ On a phone the table becomes cards, filters become a scrolling row of chips, and
 
 ![Library on a phone.](mockups/library-mobile.png)
 
-Row selection on a wide window: click, shift-click for a range, and command- or control-click to toggle. Escape clears the selection. On a phone, a tap opens that torrent. A Select action reveals checkboxes for bulk actions.
+Several torrents can be acted on together. On a wide window: click selects one row, shift-click selects a range, and command- or control-click toggles a row. Escape clears the selection. On a phone, a tap opens that torrent. Select in the toolbar reveals checkboxes. The toolbar and the menu then send one RPC call whose `ids` is every selected id.
 
-With a selection, the toolbar offers Start, Stop, Verify, and More. More contains Start now, Reannounce, Move up, Move down, Move to top, Move to bottom, Set location, and Remove. Choosing one sends the RPC call. The row’s status, rates, and queue position stay as the last `torrent-get` reported until a later read says otherwise.
+Right-click on a wide window, and a long press on a phone, open the same popup menu. `user-select: none` and `-webkit-touch-callout: none` keep the long press from selecting text or showing the browser callout. If the pressed row is already in the selection, the menu applies to every selected id. Otherwise it applies to that row.
 
-| Action | Method | Arguments |
+The menu and the toolbar offer Start, Stop, Verify, and More. More contains Start now, Reannounce, Move up, Move down, Move to top, Move to bottom, Set location, and Remove. Transmission has no separate pause method. Stop is `torrent_stop`, which is how a torrent is paused. Choosing an action disables that action in the toolbar and in the menu until the follow-up `torrent_get` returns or the call fails. The rows keep the last reported status until that read.
+
+| Action | Method | `params` |
 |---|---|---|
-| Start | `torrent-start` | `ids` |
-| Start now | `torrent-start-now` | `ids` |
-| Stop | `torrent-stop` | `ids` |
-| Verify | `torrent-verify` | `ids` |
-| Reannounce | `torrent-reannounce` | `ids` |
-| Queue | `queue-move-top`, `queue-move-up`, `queue-move-down`, `queue-move-bottom` | `ids` |
+| Start | `torrent_start` | `ids` |
+| Start now | `torrent_start_now` | `ids` |
+| Stop | `torrent_stop` | `ids` |
+| Verify | `torrent_verify` | `ids` |
+| Reannounce | `torrent_reannounce` | `ids` |
+| Queue | `queue_move_top`, `queue_move_up`, `queue_move_down`, `queue_move_bottom` | `ids` |
 
-Remove asks first. The calm choice removes the torrent and leaves the files: `torrent-remove` with `delete-local-data: false`. The other choice deletes the downloaded files. That choice is a second confirmation that names the count, then `delete-local-data: true`.
+Remove asks first. The calm choice removes the torrents and leaves the files: `torrent_remove` with `delete_local_data: false`. The other choice deletes the downloaded files. That choice is a second confirmation that names the count, then `delete_local_data: true`.
 
 Keyboard, when focus is not in a field: `/` focuses the filter, `a` opens Add, and Delete or Backspace starts the remove confirmation for the current selection.
 
-Verifying rows say “Verifying” or “Queued to verify”. The library poll does not include `recheckProgress`, so the bar keeps showing `percentDone`. The open inspector requests `recheckProgress` and shows the check fraction there.
+Verifying rows say “Verifying” or “Queued to verify”. The library poll does not include `recheck_progress`, so the bar keeps showing `percent_done`. The open inspector requests `recheck_progress` and shows that fraction there.
 
 ## 9. Inspector, add, and files
 
@@ -396,29 +469,29 @@ One selected torrent opens an inspector. On a wide window it is a third column. 
 
 Tabs: Overview, Files, Peers, Trackers. They are loaded together for that one id:
 
-`id`, `name`, `status`, `error`, `errorString`, `percentDone`, `recheckProgress`, `rateDownload`, `rateUpload`, `eta`, `uploadRatio`, `totalSize`, `sizeWhenDone`, `downloadedEver`, `uploadedEver`, `leftUntilDone`, `downloadDir`, `hashString`, `isPrivate`, `comment`, `labels`, `queuePosition`, `peersConnected`, `magnetLink`, `bandwidthPriority`, `honorsSessionLimits`, `downloadLimit`, `downloadLimited`, `uploadLimit`, `uploadLimited`, `seedRatioMode`, `seedRatioLimit`, `seedIdleMode`, `seedIdleLimit`, `peer-limit`, `group`, `files`, `fileStats`, `wanted`, `priorities`, `peers`, `peersFrom`, `trackers`, `trackerStats`, `trackerList`, `pieces`, `pieceCount`, `pieceSize`.
+`id`, `name`, `status`, `error`, `error_string`, `percent_done`, `recheck_progress`, `rate_download`, `rate_upload`, `eta`, `upload_ratio`, `total_size`, `size_when_done`, `downloaded_ever`, `uploaded_ever`, `left_until_done`, `download_dir`, `hash_string`, `is_private`, `comment`, `labels`, `queue_position`, `peers_connected`, `magnet_link`, `bandwidth_priority`, `honors_session_limits`, `download_limit`, `download_limited`, `upload_limit`, `upload_limited`, `seed_ratio_mode`, `seed_ratio_limit`, `seed_idle_mode`, `seed_idle_limit`, `peer_limit`, `group`, `sequential_download`, `files`, `file_stats`, `wanted`, `priorities`, `peers`, `peers_from`, `trackers`, `tracker_stats`, `tracker_list`, `pieces`, `piece_count`, `piece_size`.
 
-`error` is 0 when fine, 1 for a tracker warning, 2 for a tracker error, and 3 for a local error. The visible text is `errorString`.
+`error` is 0 when fine, 1 for a tracker warning, 2 for a tracker error, and 3 for a local error. The visible text is `error_string`. On Transmission 4.1 and newer, `wanted` is a boolean array.
 
-Overview shows the speeds, estimate, ratio, sizes, location, hash, privacy, labels, and peer count. When `pieceCount` is 2000 or less, it also draws the `pieces` bitfield as a grid of cells in the accent hue. Larger piece maps are skipped so the page does not build thousands of nodes.
+Overview shows the speeds, estimate, ratio, sizes, location, hash, privacy, labels, and peer count. When `piece_count` is 2000 or less, it also draws the `pieces` bitfield as a grid of cells in the accent hue. Larger piece maps are skipped so the page does not build thousands of nodes.
 
-Per-torrent controls write through `torrent-set`:
+Per-torrent controls write through `torrent_set`:
 
 - Bandwidth priority: low `-1`, normal `0`, high `1`.
-- Honour session speed limits: `honorsSessionLimits`.
-- Download and upload caps: `downloadLimited`, `downloadLimit`, `uploadLimited`, `uploadLimit`. Limits are in kB/s, as Transmission defines them.
+- Honour session speed limits: `honors_session_limits`.
+- Download and upload caps: `download_limited`, `download_limit`, `upload_limited`, `upload_limit`. Limits are in kB/s, as Transmission defines them.
 - Seed ratio and idle time: mode `0` follows the session, `1` uses this torrent’s limit, `2` is unlimited.
-- Labels, peer limit, bandwidth group, sequential download when the daemon returns that field.
+- Labels, peer limit, bandwidth group, and `sequential_download`.
 
-Files lists `files` in order. A checkbox writes `files-wanted` or `files-unwanted` with the file’s index. Priority writes `priority-high`, `priority-normal`, or `priority-low`. An empty array means every file, so the client sends explicit indices.
+Files lists `files` in order. A checkbox writes `files_wanted` or `files_unwanted` with the file’s index. Priority writes `priority_high`, `priority_normal`, or `priority_low`. An empty array means every file, so the client sends explicit indices.
 
-Peers lists the `peers` array. An empty list says no peers are connected. `peersFrom` is a short breakdown: tracker, incoming, cache, DHT, PEX, LPD, and LTEP.
+Peers lists the `peers` array. An empty list says no peers are connected. `peers_from` is a short breakdown: tracker, incoming, cache, DHT, PEX, LPD, and LTEP.
 
-Trackers edits `trackerList`: one announce URL per line, and a blank line between tiers. Saving calls `torrent-set`. The deprecated `trackerAdd`, `trackerRemove`, and `trackerReplace` arguments are not used.
+Trackers edits `tracker_list`: one announce URL per line, and a blank line between tiers. Saving calls `torrent_set`. The deprecated tracker add, remove, and replace arguments are not used.
 
-Rename, for a single torrent, calls `torrent-rename-path` with `ids`, `path`, and `name`, then refreshes `files` and `name`.
+Rename, for a single torrent, calls `torrent_rename_path` with `ids`, `path`, and `name`, then refreshes `files` and `name`.
 
-Set location calls `torrent-set-location` with `location` and `move: true` to move the files, or `move: false` to look for them in the new directory.
+Set location calls `torrent_set_location` with `location` and `move: true` to move the files, or `move: false` to look for them in the new directory.
 
 Several selected torrents show a short summary from the library fields (count, size, combined rates) and the bulk actions. They do not load peers or files.
 
@@ -430,42 +503,44 @@ The dialogue accepts a `.torrent` file or a magnet link or HTTP URL.
 
 - A file is read in the browser and sent as base64 in `metainfo`.
 - A magnet or URL is sent as `filename`.
-- `download-dir` defaults to the session’s `download-dir`. Changing it calls `free-space` and shows `size-bytes`.
-- “Start immediately” maps to `paused`. The initial checkbox follows `start-added-torrents`.
-- Labels are sent on `torrent-add` when the daemon is Transmission 4.
+- `download_dir` defaults to the session’s `download_dir`. Changing it calls `free_space` with `path` and shows `size_bytes` (and `total_size` when it is returned).
+- “Start immediately” maps to `paused`, inverted. The initial checkbox follows `start_added_torrents`.
+- Labels are sent on `torrent_add`.
 
-Either `filename` or `metainfo` is required. A duplicate comes back as `torrent-duplicate` with `result` still `"success"`. The page says the torrent is already present and selects it.
+Either `filename` or `metainfo` is required. A duplicate comes back as `result.torrent_duplicate` with no `error` object. The page says the torrent is already present and selects it.
 
 ## 10. Activity and session settings
 
-Activity reads `session-stats`: `downloadSpeed`, `uploadSpeed`, `activeTorrentCount`, `pausedTorrentCount`, `torrentCount`, plus `current-stats` and `cumulative-stats` (`downloadedBytes`, `uploadedBytes`, `filesAdded`, `secondsActive`, `sessionCount`). Those numbers are already refreshed by the 2 second tick. The wide layout also shows the current speeds at the bottom of the sidebar on every section.
+Activity reads `session_stats`: `download_speed`, `upload_speed`, `active_torrent_count`, `paused_torrent_count`, `torrent_count`, plus `current_stats` and `cumulative_stats` (`downloaded_bytes`, `uploaded_bytes`, `files_added`, `seconds_active`, `session_count`). Those numbers are already refreshed by the 2 second tick. The wide layout also shows the current speeds at the bottom of the sidebar on every section. Speeds and byte totals are formatted with `units`, as in section 6.
 
-Settings reads `session-get` when the section opens. It does not poll the whole session every 2 seconds. Each control shows the value from that read. Changing a control sends `session-set`, then `session-get` for the keys that were written, and the control updates from that second read, as in section 7.
+Settings reads `session_get` when the section opens and again after each successful `session_set`. It does not poll the whole session every 2 seconds. Each control shows the value from that read. Changing a control sends `session_set`, disables that control, then `session_get` for the keys that were written, and the control updates from that second read, as in section 7.
 
 | Section | What it edits |
 |---|---|
-| Appearance | Local only. Base colour and light, dark, or system. Not sent to Transmission. |
-| Speed | `speed-limit-down`, `speed-limit-down-enabled`, `speed-limit-up`, `speed-limit-up-enabled`, `alt-speed-down`, `alt-speed-up`, `alt-speed-enabled`, `alt-speed-time-enabled`, `alt-speed-time-begin`, `alt-speed-time-end`, `alt-speed-time-day` |
-| Downloads | `download-dir`, `incomplete-dir`, `incomplete-dir-enabled`, `start-added-torrents`, `rename-partial-files`, `trash-original-torrent-files` |
-| Seeding | `seedRatioLimited`, `seedRatioLimit`, `idle-seeding-limit-enabled`, `idle-seeding-limit` |
-| Connections | `peer-port`, `peer-port-random-on-start`, `port-forwarding-enabled`, `encryption`, `peer-limit-global`, `peer-limit-per-torrent`, `dht-enabled`, `pex-enabled`, `lpd-enabled`, `utp-enabled` |
-| Queue | `download-queue-enabled`, `download-queue-size`, `seed-queue-enabled`, `seed-queue-size`, `queue-stalled-enabled`, `queue-stalled-minutes` |
-| Blocklist | `blocklist-enabled`, `blocklist-url`, and `blocklist-update` which returns `blocklist-size` |
-| Groups | `group-get` and `group-set` when those methods succeed |
+| Appearance | This instance’s base colour and page title, saved in `instance.json`. Light, dark, or system, stored on this browser only. None of these are Transmission fields. The interface version is shown here. |
+| Speed | `speed_limit_down`, `speed_limit_down_enabled`, `speed_limit_up`, `speed_limit_up_enabled`, `alt_speed_down`, `alt_speed_up`, `alt_speed_enabled`, `alt_speed_time_enabled`, `alt_speed_time_begin`, `alt_speed_time_end`, `alt_speed_time_day` |
+| Downloads | `download_dir`, `incomplete_dir`, `incomplete_dir_enabled`, `start_added_torrents`, `rename_partial_files`, `trash_original_torrent_files` |
+| Seeding | `seed_ratio_limited`, `seed_ratio_limit`, `idle_seeding_limit_enabled`, `idle_seeding_limit` |
+| Connections | `peer_port`, `peer_port_random_on_start`, `port_forwarding_enabled`, `encryption`, `peer_limit_global`, `peer_limit_per_torrent`, `dht_enabled`, `pex_enabled`, `lpd_enabled`, `preferred_transports` |
+| Queue | `download_queue_enabled`, `download_queue_size`, `seed_queue_enabled`, `seed_queue_size`, `queue_stalled_enabled`, `queue_stalled_minutes` |
+| Blocklist | `blocklist_enabled`, `blocklist_url`, and `blocklist_update`, which returns `blocklist_size` |
+| Groups | `group_get` and `group_set` when those methods succeed |
 
-`encryption` is `required`, `preferred`, or `tolerated` on the bespoke API. The control is labelled Allowed when the stored value is `tolerated`. Port check calls `port-test` and reports `port-is-open`. Download directories show free space from `free-space`, not the deprecated `download-dir-free-space`.
+`encryption` is `required`, `preferred`, or `allowed`. Speed limits are integers, in kB/s, as Transmission 4.1.1 defines them. `preferred_transports` replaces the deprecated `tcp_enabled` and `utp_enabled` keys. Port check calls `port_test` with `ip_protocol` of `ipv4` or `ipv6` and reports `port_is_open`. Download directories show free space from `free_space`, which takes `path` and returns `size_bytes`. The deprecated `download_dir_free_space` field is not used.
 
-Script paths (`script-torrent-done-filename` and the added and seeding-done pair) live at the bottom of Downloads, as path fields, because they are session settings.
+Script paths (`script_torrent_done_filename`, `script_torrent_added_filename`, and `script_torrent_done_seeding_filename`, each with its `enabled` flag) live at the bottom of Downloads, as path fields, because they are session settings.
 
-Shut down calls `session-close` from the bottom of Settings, after a confirmation that names the daemon.
+Shut down calls `session_close` from the bottom of Settings, after a confirmation that names the daemon.
 
-The page does not offer a way to change the RPC password. That value is not a `session-set` field.
+The page does not offer a way to change the RPC password. That value is not a `session_set` field.
 
-Wire keys are the bespoke spellings. They mix kebab-case and camelCase (`speed-limit-down` next to `seedRatioLimit`). Copy them as written. Do not translate them into the snake_case names from the 4.1 JSON-RPC document.
+Wire keys are the JSON-RPC 2.0 snake_case names. Copy them as written.
 
 ## 11. Layout
 
-Structure is CSS flex and grid. Floats are not used. `position` is not used to place columns, toolbars, or cards. The modal scrim is the exception: it is `position: fixed` and covers the viewport, and its contents are centred with grid (`place-items: center`).
+The page is a full-screen app. `html` and `body` are `height: 100dvh` and `overflow: hidden`. The app grid fills that box. Scrolling happens inside the library list, the inspector body, settings, the filter list, menus, and a long truncation popup. Those regions use `overscroll-behavior: contain`. The document itself does not scroll.
+
+Structure is CSS flex and grid. Floats are not used. `position` is not used to place columns, toolbars, or cards. The modal scrim is the exception: it is `position: fixed` and covers the viewport, and its contents are centred with grid (`place-items: center`). Menus and truncation popups are also positioned against the pressed row, inside the app.
 
 | Width | Structure |
 |---|---|
@@ -482,32 +557,45 @@ Regions:
 - The inspector is a column flex: title, actions, tab list, then a scrolling body. Overview stats are a two-column grid. Tabs are a grid of equal tracks.
 - Settings is the same shell grid. Each settings form is a column flex of labelled controls. A row of related controls is a wrapping flex.
 - Dialogue actions are a row flex, aligned to the end.
-- Every grid and flex child that holds text sets `min-width: 0` so a long name or hash wraps inside the track instead of widening the page.
+- Every grid and flex child that holds text sets `min-width: 0`. Names, hashes, paths, errors, and tracker URLs use `overflow: hidden`, `text-overflow: ellipsis`, and `white-space: nowrap`, so a long string does not grow the row. Hover on a fine pointer, or a tap on a coarse pointer, opens a popup with the full string. The popup scrolls inside itself when the string is very long. Escape, or a tap outside, closes it. The cell stays the same size.
+- Numeric columns use `font-variant-numeric: tabular-nums` and a reserved width, so `0 kB/s` and a larger speed occupy the same track.
 
-Touch targets that are tapped are at least 44px on the short side. Rows on a wide window can be shorter. Hover-only actions are also available from a visible button or menu. Inputs use a 16px font so a phone browser does not zoom the page when they are focused. The bottom bar respects the safe area.
+Before the first successful library read, the list shows skeleton rows on the same grid as real rows, and the sidebar speeds and the title use fixed-height placeholders. The busy region sets `aria-busy="true"`. Placeholders are removed when that read arrives. An empty library is shown only after a read that returned no torrents. A value already on screen is not replaced with a placeholder.
+
+Touch targets that are tapped are at least 44px on the short side. Rows on a wide window can be shorter. Hover-only actions are also available from a visible button or the popup menu. Inputs use a 16px font. The bottom bar respects the safe area.
+
+The viewport is `width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no`, and the root uses `touch-action: manipulation`, so the page does not pinch-zoom or double-tap zoom. Displayed text uses `user-select: none` and `-webkit-user-select: none`. Fields that are typed into keep a caret, so a password or a path can still be entered. This is a deliberate limit: the page cannot be zoomed, and torrent names cannot be selected. Targets stay at least 44px so the phone layout remains usable at the browser’s own scale.
 
 The reconnecting banner sits above the list and does not cover the last row. Empty library: “No torrents yet” and the Add action. Empty filter: “Nothing in this filter” and a way back to All.
 
-## 12. Colour
+## 12. Colour and title
 
-Several Transmission daemons can be open at once. Each one is its own origin, and each origin keeps its own colour. The colour is how a person tells those instances apart: the page, the favicon, the browser chrome, and the installed icon. The host name under the brand is the real address, so the instance is still identifiable if two colours are close.
+Several Transmission daemons can be open at once. Each one is its own origin. Colour and the page title are how a person tells those instances apart: the window title, the page, the favicon, the browser chrome, and the installed icon. The host name under the brand is the real address, from `location.host`, so the instance is still identifiable if two colours or two titles are close.
 
-The person picks the colour in Settings on that instance. Backgrounds, text, borders, the accent, the progress bar, emphasis, and the favicon all use its hue. Lightness and chroma change. The hue does not. Changing it does not change any other instance.
+The person picks the colour and the title in Settings on that instance. Backgrounds, text, borders, the accent, the progress bar, emphasis, and the favicon all use the colour’s hue. Lightness and chroma change. The hue does not. Changing them does not change any other instance. `document.title` and the in-app heading use the title.
 
-Preset swatches are samples of other base colours. They are the only place a second hue appears, and only as a choice. Choosing one repaints this instance, including Settings. The settings text says: “This colour marks this Transmission instance. Other instances keep their own.”
+Preset swatches are samples of other base colours. They are the only place a second hue appears, and only as a choice. Choosing one repaints this instance, including Settings, once the save succeeds. The settings text says: “This colour and title mark this Transmission instance. Other instances keep their own. Other devices pick this up the next time they open it.”
 
 ![Appearance settings. The base colour is the default teal.](mockups/settings-desktop.png)
 
 Default base colour: `#14756F`.
 
-Stored in `localStorage` for this origin only:
+Colour and title are the instance’s sync storage: one file both the desktop and the phone read, applied on open and on refresh. The file is `instance.json` in that daemon’s web home:
 
-- `twui.baseColor` — the picked sRGB colour, default `#14756F`
-- `twui.appearance` — `light`, `dark`, or `system`
+```json
+{
+  "base_colour": "#14756F",
+  "title": "Media"
+}
+```
 
-A second daemon, on another port or another public hostname, has its own `localStorage` and starts from the default until a colour is chosen there. The default is the same teal so an unconfigured instance is still usable. After that, the two favicons and themes diverge.
+On every open and every refresh the page fetches `GET /transmission/web/instance.json` with `cache: "no-store"` and applies `base_colour` and `title`. It does not fetch the file again until the next open or refresh. A missing or unreadable file uses `#14756F` and the title `Transmission`. A change made on the desktop is what the phone shows the next time that phone opens or refreshes this same instance. An already open page is left as it is.
 
-`system` follows `prefers-color-scheme`. The head script reads both keys and sets the CSS variables before the first paint.
+Saving sends `PUT /transmission/web/instance.json` with the new document, using the same credentials as RPC. The colour control and the title field stay disabled until that response succeeds. Success applies the saved colour, favicon, and title on this page. Failure leaves the previous values and enables the controls. nginx writes the body onto the web-home file (section 3). That file is the copy the other device reads. Colour and title are taken from this file alone.
+
+Light, dark, and system stay on the device, in `localStorage` under `twui.appearance` (`light`, `dark`, or `system`). They are not in `instance.json`. `system` follows `prefers-color-scheme`. The head script applies the default teal before the first paint, then replaces the tokens when `instance.json` returns. The title slot is a fixed height the whole time, so the header does not jump.
+
+A second daemon has its own web home and its own `instance.json`. It starts from the default until a colour and title are saved there.
 
 How a pick becomes a palette:
 
@@ -539,11 +627,11 @@ Progress fill:
 | Downloading, queued to download, seeding, queued to seed | Accent |
 | Verifying, queued to verify | Accent, with the status words carrying the meaning |
 | Stopped | Muted step of the same hue |
-| `errorString` not empty | Emphasis |
+| `error_string` not empty | Emphasis |
 
 Selection is a soft wash of the accent, with the accent used for the current nav item.
 
-The settings sentence next to the control: “This colour marks this Transmission instance. Lightness is adjusted so text stays readable.”
+The settings sentence next to the control: “This colour marks this Transmission instance. Lightness is adjusted so text stays readable. The title is the name in the window and on your other devices after they are opened again.”
 
 `prefers-reduced-motion` disables decorative motion. Verifying does not depend on an animated stripe.
 
@@ -551,7 +639,7 @@ The settings sentence next to the control: “This colour marks this Transmissio
 
 The favicon is the same mark as the sidebar: a rounded square in the accent, and a downward arrow in the on-accent colour. It is an SVG document the page builds from the current palette and assigns to `<link rel="icon" type="image/svg+xml">`.
 
-The head script does this before the first paint, from `twui.baseColor` and `twui.appearance`, so a reload does not flash the default teal when another colour is saved. Changing the base colour, or switching light and dark, rebuilds the SVG and replaces the link. `<meta name="theme-color">` is set to the same accent at the same time, which colours the browser chrome and the installed app’s title bar.
+The first paint uses the default teal. When `instance.json` returns, and again when a colour save succeeds or light and dark changes, the page rebuilds the SVG and replaces the link. `<meta name="theme-color">` is set to the same accent at the same time, which colours the browser chrome and the installed app’s title bar.
 
 `prefers-color-scheme` is the CSS media feature used when appearance is `system`. The name is the platform spelling and stays as written.
 
@@ -563,8 +651,8 @@ The page meets the install criteria for a standalone web app: HTTPS (or localhos
 
 | Field | Value |
 |---|---|
-| `name` | Transmission, plus this instance’s host |
-| `short_name` | The host, so two installed apps are not both called Transmission |
+| `name` | The instance title, plus this instance’s host |
+| `short_name` | The instance title, so two installed apps are not both called Transmission |
 | `id` | The origin, so each instance installs separately |
 | `start_url` | `/transmission/web/` |
 | `scope` | `/transmission/web/` |
@@ -573,9 +661,9 @@ The page meets the install criteria for a standalone web app: HTTPS (or localhos
 | `theme_color` | The current accent |
 | `icons` | PNG at 192 and 512, plus a maskable 512. The mark and colours match the favicon. |
 
-The manifest, icons, and service worker live in `TRANSMISSION_WEB_HOME` and are requested under `/transmission/web/`. The shipped manifest uses the default teal so the app can be installed on the first visit. After the palette exists, the page draws the 192 and 512 icons on a canvas and stores them, with a manifest that points at them, for the service worker to serve at `/transmission/web/manifest.webmanifest`, `/transmission/web/icons/icon-192.png`, and `/transmission/web/icons/icon-512.png`. A later install of this instance uses the colour saved for this origin. Another instance installs as a separate app with its own icon. The live favicon and `theme-color` already follow every change, including in an installed copy.
+The manifest, icons, and service worker live in `TRANSMISSION_WEB_HOME` and are requested under `/transmission/web/`, each URL carrying `?vX.Y.Z` from section 3. The shipped manifest uses the default teal so the app can be installed on the first visit. After `instance.json` has been applied, the page draws the 192 and 512 icons on a canvas from that palette. The manifest `name` and `short_name` include the title from the same file. Another instance installs as a separate app with its own icon and title. The live favicon and `theme-color` follow a successful colour save on this page. Other devices take the new colour and title the next time they open or refresh.
 
-The service worker is registered at `/transmission/web/sw.js`, so its scope is `/transmission/web/`. It caches the app shell under that path so a repeat visit can open the shell. `/transmission/rpc` is outside that scope, so the worker never sees it and never caches it. Those requests always go to the daemon that served the page, directly or through nginx. A cached shell with no network shows the unreachable state from section 4, and it does not replay old torrent lists as if they were current.
+The service worker is registered at `/transmission/web/sw.js?vX.Y.Z`, so its scope is `/transmission/web/`. It caches the app shell, including the version query, so a repeat visit can open the shell. It does not cache `instance.json` or `/transmission/rpc`. RPC is outside the worker’s scope, so those requests always go to the daemon that served the page, directly or through nginx. A cached shell with no network shows the unreachable state from section 4, and it does not replay old torrent lists as if they were current. Activating a worker for a new version deletes caches from the previous `?v` query.
 
 ## 14. When things fail
 
@@ -584,7 +672,7 @@ The service worker is registered at `/transmission/web/sw.js`, so its scope is `
 | Poll fails, password still good | Keep the last list. Show reconnecting. Retry on the next tick. |
 | `401` | Lock, clear the list from memory, clear the password. |
 | `409` twice on one call | Reconnecting, with the last list kept. |
-| `result` is not `"success"` | Show the daemon’s string on the action that caused it. Leave the last accepted values in place. |
+| HTTP `200` with an `error` object | Show `error.message` on the action that caused it, plus `error.data.error_string` when it is present. Leave the last accepted values in place and enable the control again. |
 | Add finds a duplicate | Say it is already there and select that torrent. |
 | A method is unknown | Hide the control that called it. |
 | Tab in the background | Do not poll. Poll once when it is visible again. |
@@ -592,12 +680,14 @@ The service worker is registered at `/transmission/web/sw.js`, so its scope is `
 ## 15. Accessibility
 
 - Landmarks: navigation for the sidebar or bottom bar, a main region for the list, and a complementary region for the inspector.
-- The filter field, icon buttons, and tabs have visible names or accessible names.
+- The filter field, icon buttons, tabs, and the popup menu have visible names or accessible names.
 - Focus is a 2px outline in the accent, visible on keyboard focus.
 - Text on the background, and the accent label on the accent, meet 4.5:1. The progress track meets 3:1 against the surface.
 - Colour is not the only status channel. Every state has words.
 - Dialogues trap focus and return it to the control that opened them. Escape closes a dialogue before it clears a selection.
 - Removing files is not the default button in the remove dialogue.
+- Skeleton regions expose `aria-busy` until the first successful read.
+- The page sets `user-scalable=no` and `user-select: none` on displayed text, as specified in section 11. Typed fields keep a caret. Touch targets stay at least 44px because the page cannot be zoomed.
 
 ## 16. Acceptance
 
@@ -605,17 +695,18 @@ The interface is ready when all of the following hold.
 
 1. With RPC authentication enabled, a wrong password stays on the lock screen and a right password opens the library. With authentication disabled, the library stays hidden and the page says to turn authentication on.
 2. The password is absent from `localStorage`, `sessionStorage`, and the URL after unlock, after lock, and after a reload.
-3. The first RPC call of a fresh page receives `409`, stores `X-Transmission-Session-Id`, and retries once with that header. A second `409` on the same call does not retry again.
-4. A captured library request asks for exactly `id`, `name`, `status`, `percentDone`, `rateDownload`, `rateUpload`, `eta`, `totalSize`, `uploadRatio`, `errorString`, and the next one starts about 2 seconds later while the tab is visible.
+3. The first RPC call of a fresh page receives `409`, stores `X-Transmission-Session-Id`, and retries once with that header. A second `409` on the same call does not retry again. Through nginx, that header is forwarded on the request and returned on the `409`.
+4. A captured library request is JSON-RPC 2.0: `jsonrpc`, `method` `torrent_get`, `params.fields` exactly `id`, `name`, `status`, `percent_done`, `rate_download`, `rate_upload`, `eta`, `total_size`, `upload_ratio`, `error_string`, and an `id`. The next one starts about 2 seconds later while the tab is visible. A daemon whose `rpc_version_semver` is below `6.0.0` never shows the library.
 5. Hiding the tab stops the poll. Showing it polls immediately.
 6. A `401` during a poll returns to the lock screen and drops the torrent list from the page.
-7. Add by file and add by magnet both call `torrent-add`. Remove, remove-and-delete, start, stop, verify, and queue move call the methods in the tables above.
-8. Changing the base colour on one instance repaints that instance’s surfaces, text, controls, and favicon, in light and in dark, and the choice survives a reload of that origin only. A second instance keeps its own colour. `theme-color` matches the accent. The sidebar shows `location.host`.
-9. At 390px width the library, a torrent, add, and settings are each usable without a horizontal page scroll. At 1440px the list and the inspector are on screen together. Those layouts are flex and grid.
-10. Status text is present for downloading, seeding, stopped, verifying, and errors. Every status uses the selected base colour, and every status string is a label for the latest `status` or `errorString` from `torrent-get`.
-11. After `session-set` or `torrent-set` fails, the control still shows the previous server value. After it succeeds, the control shows the value from the follow-up `session-get` or `torrent-get`, including when that differs from the value that was sent.
-12. Choosing Start leaves the status label unchanged until a later `torrent-get` reports a new `status`.
-13. The browser offers to install the page served from `/transmission/web/`. Two hostnames install as two apps. The service worker’s scope is `/transmission/web/`, so it does not answer `/transmission/rpc`. Installed icons use the base colour saved for that instance.
-14. Opening the interface locally uses the daemon port. Opening it remotely uses nginx, which proxies `/transmission/` to that same daemon and forwards the password challenge. The files are the ones in `TRANSMISSION_WEB_HOME`.
+7. Add by file and add by magnet both call `torrent_add`. Remove, remove-and-delete, start, stop, verify, and queue move call the methods in the tables above. Stop is the pause action. Selecting several torrents sends one call with those `ids`.
+8. Changing the base colour or the page title on one instance writes `instance.json` in that instance’s web home, then repaints that page, including the favicon and `document.title`. A second browser of the same instance shows the new colour and title after it is opened or refreshed, and does not change while it stays open. A second instance keeps its own file. `theme-color` matches the accent. The sidebar shows `location.host`. Light and dark stay on the browser that set them.
+9. At 390px width the library, a torrent, add, and settings are each usable without a horizontal page scroll and without the document scrolling. At 1440px the list and the inspector are on screen together. Those layouts are flex and grid. Lists scroll inside the app.
+10. Status text is present for downloading, seeding, stopped, verifying, and errors. Every status uses the selected base colour, and every status string is a label for the latest `status` or `error_string` from `torrent_get`. An unknown `eta` is ∞. Speeds, sizes, ratios, and dates are human-readable.
+11. After `session_set` or `torrent_set` fails, the control still shows the previous server value and is enabled again. After it succeeds, the control shows the value from the follow-up `session_get` or `torrent_get`, including when that differs from the value that was sent. While the write is in flight, that control ignores further input.
+12. Choosing Start leaves the status label unchanged until a later `torrent_get` reports a new `status`. The Start control stays disabled until then.
+13. The browser offers to install the page served from `/transmission/web/`. Two hostnames install as two apps, named from each instance’s title. The service worker’s scope is `/transmission/web/`, so it does not answer `/transmission/rpc`. Static asset URLs end in `?v` plus the interface version, and Settings shows that same version.
+14. Opening the interface locally uses a hostname and port. Opening it remotely uses nginx on your domain, which proxies `/transmission/` to that same daemon, forwards the password challenge, and forwards the session-id header both ways. The test copy is `Testing/webui-test`, served by `Testing/docker-compose.yml` on port 9091. The deployment copy is `Deployment/webui`.
+15. The first library paint uses placeholders the same size as the finished rows, speeds, and title. Long names ellipsize, and a hover or tap shows the full string. Displayed text cannot be selected, and the page cannot be zoomed. Right-click and long-press open the action menu for the selection, or for that row when it is not selected.
 
-The mockups in this folder are static HTML under `mockups/src/`, rendered to the PNG files beside them. They show the default teal, not a live daemon.
+The mockups in this folder are static HTML under `mockups/src/`, rendered to the PNG files beside them. They show the default teal and sample torrents, not a live daemon. They were drawn before the JSON-RPC field names, the infinity estimate, and the version string. The rules in this document are the ones to build.
