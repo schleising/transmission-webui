@@ -10,7 +10,7 @@ services:
       - TZ=Europe/London
       - UMASK=077
       - TRANSMISSION_WEB_HOME=/webui
-      - USER=steve
+      - USER=test-user
       - PASS=test-password
     volumes:
       - transmission_config:/config
