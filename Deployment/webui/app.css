@@ -435,9 +435,10 @@ canvas.pieces { display: block; width: 100%; height: auto; margin: 8px 0 4px; im
 @media (min-width: 720px) {
   .shell.selecting .head-row,
   .shell.selecting .row {
-    grid-template-columns: 44px minmax(0, 1fr) 5.6rem 5.6rem 5.6rem 4.6rem 3.6rem;
+    grid-template-columns: 44px minmax(0, 1fr) 5.6rem 6.6rem 5.6rem 5.6rem 4.6rem 3.6rem;
   }
   .shell.selecting .head-row::before { content: ""; }
+  .shell.selecting .row .progress-cell { grid-column: 2 / -1; }
 }
 
 @media (max-width: 1099px) {
