@@ -86,7 +86,7 @@ The client calls the absolute path `/transmission/rpc`. From a page at `/transmi
 
 ### Interface version
 
-The interface version is `1.0.15`. Settings shows it as “Interface 1.0.15”, and adds the daemon version when `session_get` has returned one. The same string is the cache-busting query on every static file: `app.css?v1.0.15`, `app.js?v1.0.15`, `manifest.webmanifest?v1.0.15`, icon URLs, and `sw.js?v1.0.15`. The HTML links use that query. Raising the version changes every URL, and the service worker drops the previous cache when it activates. The latest published release tag is `v1.0.1`. A cookieless probe that is redirected to a sign-in page is retried with the browser cookies.
+The interface version is `1.0.16`. Settings shows it as “Interface 1.0.16”, and adds the daemon version when `session_get` has returned one. The same string is the cache-busting query on every static file: `app.css?v1.0.16`, `app.js?v1.0.16`, `manifest.webmanifest?v1.0.16`, icon URLs, and `sw.js?v1.0.16`. The HTML links use that query. Raising the version changes every URL, and the service worker drops the previous cache when it activates. The latest published release tag is `v1.0.1`. A cookieless probe that is redirected to a sign-in page is retried with the browser cookies.
 
 `Deployment/webui` also contains an empty `default.json`. Leave that file in the web home. It is there so Transmission does not report a missing `default.json` when it starts.
 
@@ -386,7 +386,7 @@ The page keeps the raw numbers from RPC. Everything drawn on screen is formatted
 | `percent_done` beside a progress bar | Two decimal places, floored, so a fraction just under 1 cannot read as 100%. `100.00%` and a full bar only when the fraction is at least 1. While `status` is 2, the bar uses `recheck_progress` with this same rule. |
 | `recheck_progress` on the inspector’s “Verifying” line, peer progress | A whole-number percentage from the 0–1 fraction. |
 | `upload_ratio` | Two decimal places. |
-| `eta` and other durations | Hours and minutes, or seconds when the duration is under a minute. Any `eta` below 0 is ∞. |
+| `eta` | The two largest units: seconds under a minute; minutes under an hour; hours and minutes under a day; days and hours under a week, or days and minutes when no hours remain; weeks and days from a week up. A zero second unit is left off, so a whole day is `1d` and a whole week is `1wk`. Any `eta` below 0 is ∞. |
 | `seconds_active` on Activity | Days, hours, and minutes. A zero unit is left out. Under a minute is `0 min`. |
 | Unix timestamps | The local date and time. |
 | Counts | Grouped digits. |

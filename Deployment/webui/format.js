@@ -62,8 +62,22 @@
     if (!Number.isFinite(n) || n < 0) return "∞";
     n = Math.round(n);
     if (n < 60) return n + " sec";
-    var hours = Math.floor(n / 3600);
-    var minutes = Math.floor((n % 3600) / 60);
+    var minutes = Math.floor(n / 60);
+    var days = Math.floor(minutes / 1440);
+    var weeks = Math.floor(days / 7);
+    if (weeks > 0) {
+      days = days % 7;
+      return days ? weeks + "wk " + days + "d" : weeks + "wk";
+    }
+    if (days > 0) {
+      var dayHours = Math.floor((minutes % 1440) / 60);
+      var dayMinutes = minutes % 60;
+      if (dayHours > 0) return days + "d " + dayHours + " hr";
+      if (dayMinutes > 0) return days + "d " + dayMinutes + " min";
+      return days + "d";
+    }
+    var hours = Math.floor(minutes / 60);
+    minutes = minutes % 60;
     if (hours > 0 && minutes > 0) return hours + " hr " + minutes + " min";
     if (hours > 0) return hours + " hr";
     return minutes + " min";
