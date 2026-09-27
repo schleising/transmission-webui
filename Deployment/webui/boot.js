@@ -1,6 +1,6 @@
 /* Applies the saved colour, title, and appearance before the body is painted. */
 (function () {
-  var VERSION = "1.0.11";
+  var VERSION = "1.0.13";
   var DEFAULT_COLOUR = "#14756F";
   var DEFAULT_TITLE = "Transmission";
   var root = document.documentElement;
