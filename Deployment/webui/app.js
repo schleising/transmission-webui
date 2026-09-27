@@ -17,7 +17,7 @@
     "queue-bottom": "queue_move_bottom"
   };
   var WATCH = { start: true, "start-now": true, stop: true, verify: true };
-  var PRESETS = ["#14756F", "#1F4E79", "#5C4B8A", "#8C3A3A", "#3D6B4F"];
+  var PRESETS = ["#9D174D", "#8C3A3A", "#C2410C", "#CA8A04", "#4D7C0F", "#3D6B4F", "#14756F", "#0E7490", "#1F4E79", "#312E81", "#5C4B8A", "#A21CAF"];
   var DAYS = [["Monday", 2], ["Tuesday", 4], ["Wednesday", 8], ["Thursday", 16], ["Friday", 32], ["Saturday", 64], ["Sunday", 1]];
   var pollTimer = null;
   var pollGeneration = 0;
@@ -2040,6 +2040,6 @@
     closeMobileDetail(true);
   });
 
-  if ("serviceWorker" in navigator) navigator.serviceWorker.register(location.origin + "/transmission/web/sw.js?v1.0.13").catch(function () {});
+  if ("serviceWorker" in navigator) navigator.serviceWorker.register(location.origin + "/transmission/web/sw.js?v1.0.14").catch(function () {});
   probe();
 })();

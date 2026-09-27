@@ -2,7 +2,7 @@
 
 A browser interface for a [Transmission](https://transmissionbt.com/) daemon. It is a static page: it has no server of its own, and the only password is the one that daemon already requires. Transmission 4.1 or newer serves the page from `TRANSMISSION_WEB_HOME` and answers JSON-RPC 2.0 at `/transmission/rpc`.
 
-The interface version is 1.0.13. Settings shows that version, and the daemon version once the session has been read. Copy on screen uses British spelling. RPC names stay as Transmission spells them.
+The interface version is 1.0.14. Settings shows that version, and the daemon version once the session has been read. Copy on screen uses British spelling. RPC names stay as Transmission spells them.
 
 The behaviour of the page is written up in [Design/transmission-webui.md](Design/transmission-webui.md). The pictures in that folder are earlier mockups.
 
@@ -102,7 +102,7 @@ Click a torrent to open it. On a wide window the inspector is a column beside th
 
 **Activity** shows the speeds and the session and cumulative totals. Active time is days, hours, and minutes. **Settings** edits the daemon. A control stays disabled while its write is in flight, and it changes only after Transmission accepts the write and a follow-up read returns the stored value.
 
-**Appearance**, at the top of Settings, sets the base colour, the window title, and light, dark, or system. The colour and the title are remembered in this browser for this address. They are applied on this page when you save them, and the next time this browser opens this address. They are not copied to another browser or another phone. A grey has no hue to build from, so it is refused. Presets are `#14756F`, `#1F4E79`, `#5C4B8A`, `#8C3A3A`, and `#3D6B4F`.
+**Appearance**, at the top of Settings, sets the base colour, the window title, and light, dark, or system. The colour and the title are remembered in this browser for this address. They are applied on this page when you save them, and the next time this browser opens this address. They are not copied to another browser or another phone. A grey has no hue to build from, so it is refused. Presets run around the hue wheel: `#9D174D`, `#8C3A3A`, `#C2410C`, `#CA8A04`, `#4D7C0F`, `#3D6B4F`, `#14756F`, `#0E7490`, `#1F4E79`, `#312E81`, `#5C4B8A`, and `#A21CAF`.
 
 The page can be installed. The service worker caches the app shell only. It does not cache `/transmission/rpc`.
 

@@ -86,7 +86,7 @@ The client calls the absolute path `/transmission/rpc`. From a page at `/transmi
 
 ### Interface version
 
-The interface version is `1.0.13`. Settings shows it as “Interface 1.0.13”, and adds the daemon version when `session_get` has returned one. The same string is the cache-busting query on every static file: `app.css?v1.0.13`, `app.js?v1.0.13`, `manifest.webmanifest?v1.0.13`, icon URLs, and `sw.js?v1.0.13`. The HTML links use that query. Raising the version changes every URL, and the service worker drops the previous cache when it activates. The latest published release tag is `v1.0.1`. A cookieless probe that is redirected to a sign-in page is retried with the browser cookies.
+The interface version is `1.0.14`. Settings shows it as “Interface 1.0.14”, and adds the daemon version when `session_get` has returned one. The same string is the cache-busting query on every static file: `app.css?v1.0.14`, `app.js?v1.0.14`, `manifest.webmanifest?v1.0.14`, icon URLs, and `sw.js?v1.0.14`. The HTML links use that query. Raising the version changes every URL, and the service worker drops the previous cache when it activates. The latest published release tag is `v1.0.1`. A cookieless probe that is redirected to a sign-in page is retried with the browser cookies.
 
 `Deployment/webui` also contains an empty `default.json`. Leave that file in the web home. It is there so Transmission does not report a missing `default.json` when it starts.
 
@@ -600,7 +600,7 @@ Several Transmission daemons can be open at once. Each one is its own origin. Co
 
 The person picks the colour and the title in Settings on that instance. Backgrounds, text, borders, the accent, the progress bar, emphasis, and the favicon all use the colour’s hue. Lightness and chroma change. The hue does not. The piece map is the exception in section 9. Changing the colour does not change any other origin. `document.title` and the in-app heading use the title. A successful save repaints this page at once. The next open of this address in this browser reads the same stored values before the first paint.
 
-Preset swatches are `#14756F`, `#1F4E79`, `#5C4B8A`, `#8C3A3A`, and `#3D6B4F`. They are the only place a second hue appears, and only as a choice. A grey pick, OKLCH chroma below `0.02`, is rejected and the previous colour stays. Choosing a preset repaints this page once the save succeeds. The settings text says: “This colour marks this Transmission instance. Lightness is adjusted so text stays readable. The title is the name in the window. Both are remembered in this browser and applied the next time this address is opened.”
+Preset swatches run around the hue wheel: `#9D174D`, `#8C3A3A`, `#C2410C`, `#CA8A04`, `#4D7C0F`, `#3D6B4F`, `#14756F`, `#0E7490`, `#1F4E79`, `#312E81`, `#5C4B8A`, and `#A21CAF`. They are the only place a second hue appears, and only as a choice. A grey pick, OKLCH chroma below `0.02`, is rejected and the previous colour stays. Choosing a preset repaints this page once the save succeeds. The settings text says: “This colour marks this Transmission instance. Lightness is adjusted so text stays readable. The title is the name in the window. Both are remembered in this browser and applied the next time this address is opened.”
 
 ![Appearance settings. The base colour is the default teal.](mockups/settings-desktop.png)
 
