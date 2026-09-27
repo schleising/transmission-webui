@@ -11,9 +11,9 @@ Target daemon: Transmission 4.1 or newer. The current release this design is wri
 - Sign-in uses Transmission’s RPC username and password. The interface stores no password of its own.
 - Every call is an HTTP POST to `/transmission/rpc`.
 - A `409` response yields a new `X-Transmission-Session-Id`. The client stores that value and sends the same request again with the header set.
-- While the library is open, the client polls `torrent_get` every 2 seconds for `id`, `name`, `status`, `percent_done`, `rate_download`, `rate_upload`, `eta`, `total_size`, `upload_ratio`, and `error_string`.
+- While the library is open, the client polls `torrent_get` every 2 seconds for `id`, `name`, `status`, `percent_done`, `rate_download`, `rate_upload`, `eta`, `total_size`, `downloaded_ever`, `upload_ratio`, and `error_string`.
 - The same screen manages the session: add, start, stop, verify, reannounce, files, peers, trackers, labels, speed limits, and the rest of the session settings Transmission exposes.
-- The chrome is hues of one colour, including the favicon. A complete torrent’s progress is green, and the piece map uses grey, red, and green, as set out below. Colour and page title are stored in this browser for this origin. They are not copied to another device. Light, dark, or system stays on the device.
+- The chrome is hues of one colour, including the favicon. A torrent’s progress bar and status chip use that hue, stepped by status. The piece map uses grey, red, and green, as set out below. Colour and page title are stored in this browser for this origin. They are not copied to another device. Light, dark, or system stays on the device.
 - Torrent status, speeds, and session facts are whatever Transmission last reported. A setting changes on screen only after the daemon accepts it and a follow-up read returns the new value.
 - The shell is laid out with CSS flex and grid.
 - The page is a full-screen PWA. The document does not scroll. Scrolling happens inside the list, the inspector, settings, and menus.
@@ -86,7 +86,7 @@ The client calls the absolute path `/transmission/rpc`. From a page at `/transmi
 
 ### Interface version
 
-The interface version is `1.0.5`. Settings shows it as “Interface 1.0.5”, and adds the daemon version when `session_get` has returned one. The same string is the cache-busting query on every static file: `app.css?v1.0.5`, `app.js?v1.0.5`, `manifest.webmanifest?v1.0.5`, icon URLs, and `sw.js?v1.0.5`. The HTML links use that query. Raising the version changes every URL, and the service worker drops the previous cache when it activates. The latest published release tag is `v1.0.1`. A cookieless probe that is redirected to a sign-in page is retried with the browser cookies.
+The interface version is `1.0.8`. Settings shows it as “Interface 1.0.8”, and adds the daemon version when `session_get` has returned one. The same string is the cache-busting query on every static file: `app.css?v1.0.8`, `app.js?v1.0.8`, `manifest.webmanifest?v1.0.8`, icon URLs, and `sw.js?v1.0.8`. The HTML links use that query. Raising the version changes every URL, and the service worker drops the previous cache when it activates. The latest published release tag is `v1.0.1`. A cookieless probe that is redirected to a sign-in page is retried with the browser cookies.
 
 `Deployment/webui` also contains an empty `default.json`. Leave that file in the web home. It is there so Transmission does not report a missing `default.json` when it starts.
 
@@ -341,6 +341,7 @@ Example library request:
       "rate_upload",
       "eta",
       "total_size",
+      "downloaded_ever",
       "upload_ratio",
       "error_string"
     ]
@@ -422,7 +423,7 @@ Wide layout: filters and session speeds on the left, the torrent table on the ri
 
 ![Library on a wide window, default teal, light mode.](mockups/library-desktop.png)
 
-The same hue in dark mode. Stopped rows use a duller fill. Errors use a darker or lighter step of the same hue, plus the error text.
+The same hue in dark mode. A stopped torrent’s progress uses a duller step of that hue. An error uses a darker or lighter step, and the error text is shown as well.
 
 ![The same library in dark mode.](mockups/library-dark.png)
 
@@ -438,9 +439,11 @@ Right-click on a wide window, and a long press on a phone, open the same popup m
 
 The menu also offers Select, except when select mode is already on and the pressed row is part of the selection, and except when the menu was opened from More on the inspector. Choosing Select enters select mode with that torrent, or keeps the current multi-selection when the menu applies to all of it. A banner at the bottom of the workspace shows how many torrents are selected, and an X that leaves select mode and clears the selection. Start, Stop, Start now, Verify, Reannounce, and a confirmed Remove do the same: select mode ends and the selection is cleared. In select mode a plain click toggles the row, on a wide window and on a phone. Checkboxes are shown while selecting. On a phone the selecting row is a two-column grid: the checkbox beside the card, and the progress bar on the next row at full width.
 
-The library row puts the progress bar on its own full-width line under the name, with the percentage on the right. The header groups Name and Progress, then Size, Down, Up, ETA, and Ratio. The grid is `minmax(0, 1fr) 5.6rem 5.6rem 5.6rem 4.6rem 3.6rem`. The progress cell spans every column.
+The library row puts the progress bar on its own full-width line under the name, with the percentage on the right. The status chip is on its own row under the name, in the same colour family as the bar. In the inspector the chip is on the row above the progress bar. The header groups Name and Progress, then Size, Downloaded, Down, Up, ETA, and Ratio. The grid is `minmax(0, 1fr) 5.6rem 6.6rem 5.6rem 5.6rem 4.6rem 3.6rem`. The progress cell spans every column.
 
-A torrent with `percent_done` of at least 1 is complete. Its row is tinted green and its bar is `#2e7d32`, ahead of the stopped and error colours. The percentage is green as well.
+On a phone the row is a card. The status chip is under the name, with a small gap beneath it. Under that, the stats are a four-column grid of three rows, so each label and its value are separate cells and the values line up: Size, Downloaded, Down, Up, ETA, Ratio. Downloaded is `downloaded_ever`, and that column is also on the desktop row, to the right of Size.
+
+A torrent with `percent_done` of at least 1 is finished. The row is not tinted. The bar and the chip follow the torrent’s status, not a separate complete colour.
 
 The inspector’s own actions are Start, Stop, Verify, Remove, and More, aligned to the start. Close is an X at every width. Closing clears the selection. There is no Back button. Below 1100px the list is hidden while the inspector is open, and the inspector fills the space above the bottom bar.
 
@@ -573,7 +576,7 @@ Regions:
 
 - The sidebar is a column flex: brand, the instance host (`location.host`), section links, a scrolling filter group (`minmax(0, 1fr)`), then speeds.
 - The toolbar is a single row flex that does not wrap: the filter field grows (`flex: 1`), and Add sits at the end. It is hidden when the view is not Torrents.
-- Each library row is a grid with the same column template as the header: `minmax(0, 1fr) 5.6rem 5.6rem 5.6rem 4.6rem 3.6rem`. Name and Progress share the first track in the header. The progress bar is its own row and spans every column, with the percentage at the end of that row. Name takes the remaining space (`minmax(0, 1fr)`).
+- Each library row is a grid with the same column template as the header: `minmax(0, 1fr) 5.6rem 6.6rem 5.6rem 5.6rem 4.6rem 3.6rem`. Name and Progress share the first track in the header. The progress bar is its own row and spans every column, with the percentage at the end of that row. Name takes the remaining space (`minmax(0, 1fr)`).
 - Phone cards use the same progress row. Below 1100px the Down and Up speeds in the phone header are aligned to the end of the header. The bottom bar does not scroll away with the cards.
 - The inspector is a column flex: title, actions, tab list, then a scrolling body. Overview stats are a two-column grid. Tabs are a grid of equal tracks.
 - Settings is the same shell grid. Each settings form is a column flex of labelled controls. A row of related controls is a wrapping flex.
@@ -593,7 +596,7 @@ The reconnecting banner sits above the list and does not cover the last row. Emp
 
 Several Transmission daemons can be open at once. Each one is its own origin. Colour and the page title help tell those instances apart on this browser: the window title, the page, the favicon, the browser chrome, and the installed icon. They are stored in `localStorage` for this origin only (`twui.baseColor`, `twui.title`). They are not sent to the daemon and they are not copied to another browser or another device. The host name under the brand is the real address, from `location.host`, so the instance is still identifiable if two colours or two titles are close.
 
-The person picks the colour and the title in Settings on that instance. Backgrounds, text, borders, the accent, the ordinary progress bar, emphasis, and the favicon all use the colour’s hue. Lightness and chroma change. The hue does not. The piece map and a complete torrent’s green bar are the exceptions in sections 8 and 9. Changing the colour does not change any other origin. `document.title` and the in-app heading use the title. A successful save repaints this page at once. The next open of this address in this browser reads the same stored values before the first paint.
+The person picks the colour and the title in Settings on that instance. Backgrounds, text, borders, the accent, the progress bar, emphasis, and the favicon all use the colour’s hue. Lightness and chroma change. The hue does not. The piece map is the exception in section 9. Changing the colour does not change any other origin. `document.title` and the in-app heading use the title. A successful save repaints this page at once. The next open of this address in this browser reads the same stored values before the first paint.
 
 Preset swatches are `#14756F`, `#1F4E79`, `#5C4B8A`, `#8C3A3A`, and `#3D6B4F`. They are the only place a second hue appears, and only as a choice. A grey pick, OKLCH chroma below `0.02`, is rejected and the previous colour stays. Choosing a preset repaints this page once the save succeeds. The settings text says: “This colour marks this Transmission instance. Lightness is adjusted so text stays readable. The title is the name in the window. Both are remembered in this browser and applied the next time this address is opened.”
 
@@ -636,11 +639,12 @@ Progress fill:
 
 | Row | Fill |
 |---|---|
-| Downloading, queued to download, seeding, queued to seed | Accent |
-| Verifying, queued to verify | Accent, with the status words carrying the meaning |
+| Downloading | Accent |
+| Seeding | A lighter step of the accent |
+| Queued to download, queued to seed | A duller step of the accent |
+| Verifying, queued to verify | A darker or lighter step of the accent |
 | Stopped | Muted step of the same hue |
 | `error_string` not empty | Emphasis |
-| Complete (`percent_done` at least 1) | `#2e7d32`, ahead of the stopped and error fills |
 
 Selection is a soft wash of the accent, with the accent used for the current nav item.
 
@@ -709,13 +713,13 @@ The interface is ready when all of the following hold.
 1. With RPC authentication enabled, a wrong password stays on the lock screen and a right password opens the library. With authentication disabled, the library stays hidden and the page says to turn authentication on.
 2. The password is absent from `localStorage`, `sessionStorage`, and the URL after unlock, after lock, and after a reload.
 3. The first RPC call of a fresh page receives `409`, stores `X-Transmission-Session-Id`, and retries once with that header. A second `409` on the same call does not retry again. Through nginx, that header is forwarded on the request and returned on the `409`.
-4. A captured library request is JSON-RPC 2.0: `jsonrpc`, `method` `torrent_get`, `params.fields` exactly `id`, `name`, `status`, `percent_done`, `rate_download`, `rate_upload`, `eta`, `total_size`, `upload_ratio`, `error_string`, and an `id`. The next one starts about 2 seconds later while the tab is visible. A daemon whose `rpc_version_semver` is below `6.0.0` never shows the library.
+4. A captured library request is JSON-RPC 2.0: `jsonrpc`, `method` `torrent_get`, `params.fields` exactly `id`, `name`, `status`, `percent_done`, `rate_download`, `rate_upload`, `eta`, `total_size`, `downloaded_ever`, `upload_ratio`, `error_string`, and an `id`. The next one starts about 2 seconds later while the tab is visible. A daemon whose `rpc_version_semver` is below `6.0.0` never shows the library.
 5. Hiding the tab stops the poll. Showing it polls immediately.
 6. A `401` during a poll returns to the lock screen and drops the torrent list from the page.
 7. Add by file and add by magnet both call `torrent_add`. Remove, remove-and-delete, start, stop, and verify call the methods in the tables above. Stop is the pause action. Selecting several torrents sends one call with those `ids`.
 8. Changing the base colour or the page title repaints this page, including the favicon and `document.title`, once the change is stored. Another window of this browser shows that colour and title after it is opened or refreshed. Another browser, and another device, keep their own. `theme-color` matches the accent. The sidebar shows `location.host`. Light and dark stay on the browser that set them.
 9. At 390px width the library, a torrent, add, and settings are each usable without a horizontal page scroll and without the document scrolling. At 1440px the list and the inspector are on screen together. Those layouts are flex and grid. Lists scroll inside the app. The toolbar is Filter by name and Add on one row. The inspector closes with an X and has no Back control. There is no Shut down control.
-10. Status text is present for downloading, seeding, stopped, verifying, and errors. A complete torrent is green, as in section 8. The piece map uses the colours in section 9, and its key does not list Downloading. Every status string is a label for the latest `status` or `error_string` from `torrent_get`. An unknown `eta` is ∞. The percentage beside a progress bar shows two decimal places and is not 100% until `percent_done` is at least 1. Speeds, sizes, ratios, and dates are human-readable. Finished uses that same complete test.
+10. Status text is present for downloading, seeding, stopped, verifying, and errors, on a chip under the name and on the row above the progress bar in the inspector. The progress bar uses the same status colour. A finished torrent is not given a green row. The piece map uses the colours in section 9, and its key does not list Downloading. Every status string is a label for the latest `status` from `torrent_get`, and an error chip follows a non-empty `error_string`. An unknown `eta` is ∞. The percentage beside a progress bar shows two decimal places and is not 100% until `percent_done` is at least 1. Speeds, sizes, ratios, and dates are human-readable. Finished uses that same complete test.
 11. After `session_set` or `torrent_set` fails, the control still shows the previous server value and is enabled again. After it succeeds, the control shows the value from the follow-up `session_get` or `torrent_get`, including when that differs from the value that was sent. While the write is in flight, that control ignores further input.
 12. Choosing Start leaves the status label unchanged until a later `torrent_get` reports a new `status`. The Start control stays disabled until then.
 13. The browser offers to install the page served from `/transmission/web/`. Two hostnames install as two apps, named from each instance’s title. The service worker’s scope is `/transmission/web/`, so it does not answer `/transmission/rpc`. Static asset URLs end in `?v` plus the interface version, and Settings shows that same version.

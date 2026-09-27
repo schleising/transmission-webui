@@ -1,5 +1,5 @@
 (function () {
-  var LIBRARY_FIELDS = ["id", "name", "status", "percent_done", "rate_download", "rate_upload", "eta", "total_size", "upload_ratio", "error_string"];
+  var LIBRARY_FIELDS = ["id", "name", "status", "percent_done", "rate_download", "rate_upload", "eta", "total_size", "downloaded_ever", "upload_ratio", "error_string"];
   var UNLOCK_FIELDS = ["rpc_version_semver", "version", "units", "download_dir", "start_added_torrents"];
   var DETAIL_FIELDS = ["id", "name", "status", "error", "error_string", "percent_done", "percent_complete", "recheck_progress", "rate_download", "rate_upload", "eta", "upload_ratio", "total_size", "size_when_done", "have_valid", "have_unchecked", "downloaded_ever", "uploaded_ever", "left_until_done", "download_dir", "hash_string", "is_private", "comment", "labels", "queue_position", "peers_connected", "magnet_link", "bandwidth_priority", "honors_session_limits", "download_limit", "download_limited", "upload_limit", "upload_limited", "seed_ratio_mode", "seed_ratio_limit", "seed_idle_mode", "seed_idle_limit", "peer_limit", "group", "sequential_download", "sequential_download_from_piece", "files", "file_stats", "wanted", "priorities", "peers", "peers_from", "trackers", "tracker_stats", "tracker_list", "pieces", "availability", "piece_count", "piece_size"];
   var SESSION_FIELDS = ["speed_limit_down", "speed_limit_down_enabled", "speed_limit_up", "speed_limit_up_enabled", "alt_speed_down", "alt_speed_up", "alt_speed_enabled", "alt_speed_time_enabled", "alt_speed_time_begin", "alt_speed_time_end", "alt_speed_time_day", "download_dir", "incomplete_dir", "incomplete_dir_enabled", "start_added_torrents", "rename_partial_files", "trash_original_torrent_files", "script_torrent_done_filename", "script_torrent_done_enabled", "script_torrent_added_filename", "script_torrent_added_enabled", "script_torrent_done_seeding_filename", "script_torrent_done_seeding_enabled", "seed_ratio_limited", "seed_ratio_limit", "idle_seeding_limit_enabled", "idle_seeding_limit", "peer_port", "peer_port_random_on_start", "port_forwarding_enabled", "encryption", "peer_limit_global", "peer_limit_per_torrent", "dht_enabled", "pex_enabled", "lpd_enabled", "preferred_transports", "download_queue_enabled", "download_queue_size", "seed_queue_enabled", "seed_queue_size", "queue_stalled_enabled", "queue_stalled_minutes", "blocklist_enabled", "blocklist_url", "blocklist_size", "version", "rpc_version_semver", "units"];
@@ -149,18 +149,27 @@
   function detailWanted() {
     return state.view === "torrents" && state.selected.size === 1 && (Twui.wide.matches || state.detailOpen);
   }
+  function statusInfo(torrent) {
+    var status = Number(torrent && torrent.status);
+    var label = STATUS[status] || "Stopped";
+    var kind = "stopped";
+    if (torrent && torrent.error_string) kind = "error";
+    else if (status === 4) kind = "downloading";
+    else if (status === 6) kind = "seeding";
+    else if (status === 3 || status === 5) kind = "queued";
+    else if (status === 1 || status === 2) kind = "checking";
+    return { kind: kind, label: label };
+  }
   function barClass(torrent) {
-    if (torrentComplete(torrent)) return "bar complete";
-    if (torrent.error_string) return "bar error";
-    if (torrent.status === 0) return "bar stopped";
-    return "bar";
+    return "bar " + statusInfo(torrent).kind;
+  }
+  function statusChip(torrent) {
+    var info = statusInfo(torrent);
+    return '<span class="status ' + info.kind + '" data-status-chip>' + esc(info.label) + '</span>';
   }
   function torrentComplete(torrent) {
     var done = Number(torrent && torrent.percent_done);
     return Number.isFinite(done) && done >= 1;
-  }
-  function subText(torrent) {
-    return torrent.error_string || STATUS[torrent.status] || "Stopped";
   }
   function minutesToTime(value) {
     var minutes = Number(value) || 0;
@@ -393,6 +402,21 @@
     var fraction = shownFraction(detail);
     var bar = inspector.querySelector("[data-live-progress]");
     if (bar) bar.className = barClass(detail);
+    var info = statusInfo(detail);
+    var chip = inspector.querySelector("[data-status-chip]");
+    if (chip) {
+      chip.className = "status " + info.kind;
+      if (chip.textContent !== info.label) chip.textContent = info.label;
+    }
+    var err = inspector.querySelector("[data-status-error]");
+    if (err) {
+      var message = detail.error_string || "";
+      err.hidden = !message;
+      if (err.textContent !== message) {
+        err.textContent = message;
+        err.setAttribute("data-full", message);
+      }
+    }
     inspector.querySelectorAll("[data-live-progress] > span").forEach(function (fill) {
       fill.style.width = progressWidth(fraction);
     });
@@ -681,14 +705,18 @@
     var selected = state.selected.has(torrent.id);
     var fraction = shownFraction(torrent);
     var check = '<span class="check-col"><input type="checkbox" data-check="' + torrent.id + '"' + (selected ? " checked" : "") + ' aria-label="Select ' + esc(torrent.name) + '"></span>';
-    var complete = torrentComplete(torrent) ? " complete" : "";
-    return '<div class="row' + (selected ? " selected" : "") + complete + '" data-id="' + torrent.id + '" role="row" aria-selected="' + selected + '">' + check + '<div class="card-body"><div class="name clip" data-full="' + esc(torrent.name) + '">' + esc(torrent.name) + '</div><div class="sub clip' + (torrent.error_string ? " error" : "") + '" data-full="' + esc(subText(torrent)) + '">' + esc(subText(torrent)) + '</div><div class="card-meta"><span>Size <b>' + esc(Twui.formatBytes(torrent.total_size, state.units)) + '</b></span><span>Down <b>' + esc(Twui.formatSpeed(torrent.rate_download, state.units)) + '</b></span><span>Up <b>' + esc(Twui.formatSpeed(torrent.rate_upload, state.units)) + '</b></span><span>ETA <b>' + esc(Twui.formatDuration(torrent.eta)) + '</b></span><span>Ratio <b>' + esc(Twui.formatRatio(torrent.upload_ratio)) + '</b></span></div></div><div class="num">' + esc(Twui.formatBytes(torrent.total_size, state.units)) + '</div><div class="num">' + esc(Twui.formatSpeed(torrent.rate_download, state.units)) + '</div><div class="num">' + esc(Twui.formatSpeed(torrent.rate_upload, state.units)) + '</div><div class="num">' + esc(Twui.formatDuration(torrent.eta)) + '</div><div class="num">' + esc(Twui.formatRatio(torrent.upload_ratio)) + '</div><div class="progress-cell"><span class="' + barClass(torrent) + '" data-live-progress><span style="width:' + progressWidth(fraction) + '"></span></span><span class="pct" data-live-percent>' + esc(progressText(fraction)) + '</span></div></div>';
+    var errorLine = torrent.error_string ? '<div class="sub error clip" data-full="' + esc(torrent.error_string) + '">' + esc(torrent.error_string) + '</div>' : "";
+    function metaPair(label, value) {
+      return '<span>' + label + '</span><b>' + esc(value) + '</b>';
+    }
+    var meta = '<div class="card-meta">' + metaPair("Size", Twui.formatBytes(torrent.total_size, state.units)) + metaPair("Downloaded", Twui.formatBytes(torrent.downloaded_ever, state.units)) + metaPair("Down", Twui.formatSpeed(torrent.rate_download, state.units)) + metaPair("Up", Twui.formatSpeed(torrent.rate_upload, state.units)) + metaPair("ETA", Twui.formatDuration(torrent.eta)) + metaPair("Ratio", Twui.formatRatio(torrent.upload_ratio)) + '</div>';
+    return '<div class="row' + (selected ? " selected" : "") + '" data-id="' + torrent.id + '" role="row" aria-selected="' + selected + '">' + check + '<div class="card-body"><div class="name-line"><div class="name clip" data-full="' + esc(torrent.name) + '">' + esc(torrent.name) + '</div>' + statusChip(torrent) + '</div>' + errorLine + meta + '</div><div class="num">' + esc(Twui.formatBytes(torrent.total_size, state.units)) + '</div><div class="num">' + esc(Twui.formatBytes(torrent.downloaded_ever, state.units)) + '</div><div class="num">' + esc(Twui.formatSpeed(torrent.rate_download, state.units)) + '</div><div class="num">' + esc(Twui.formatSpeed(torrent.rate_upload, state.units)) + '</div><div class="num">' + esc(Twui.formatDuration(torrent.eta)) + '</div><div class="num">' + esc(Twui.formatRatio(torrent.upload_ratio)) + '</div><div class="progress-cell"><span class="' + barClass(torrent) + '" data-live-progress><span style="width:' + progressWidth(fraction) + '"></span></span><span class="pct" data-live-percent>' + esc(progressText(fraction)) + '</span></div></div>';
   }
   function listHtml() {
     if (!state.loaded) {
       var bones = "";
       for (var i = 0; i < 8; i++) bones += '<div class="row skeleton-row"><div><div class="skeleton name"></div><div class="skeleton sub"></div></div><div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div></div>';
-      return '<div class="head-row"><span>Name</span><span>Progress</span><span class="num">Size</span><span class="num">Down</span><span class="num">Up</span><span class="num">ETA</span><span class="num">Ratio</span></div>' + bones;
+      return '<div class="head-row"><span>Name</span><span class="num">Size</span><span class="num">Downloaded</span><span class="num">Down</span><span class="num">Up</span><span class="num">ETA</span><span class="num">Ratio</span></div>' + bones;
     }
     var rows = visibleTorrents();
     if (!rows.length) {
@@ -696,7 +724,7 @@
       if (libraryEmpty) return '<div class="note"><p>No torrents yet</p></div>';
       return '<div class="note"><p>Nothing in this filter</p><button type="button" class="primary" data-act="filter" data-filter="all">Show all</button></div>';
     }
-    var head = '<div class="head-row" role="row"><div class="head-main"><button type="button" class="left" data-act="sort" data-sort="name">Name</button><button type="button" class="left" data-act="sort" data-sort="percent_done">Progress</button></div><button type="button" class="num" data-act="sort" data-sort="total_size">Size</button><button type="button" class="num" data-act="sort" data-sort="rate_download">Down</button><button type="button" class="num" data-act="sort" data-sort="rate_upload">Up</button><button type="button" class="num" data-act="sort" data-sort="eta">ETA</button><button type="button" class="num" data-act="sort" data-sort="upload_ratio">Ratio</button></div>';
+    var head = '<div class="head-row" role="row"><div class="head-main"><button type="button" class="left" data-act="sort" data-sort="name">Name</button><button type="button" class="left" data-act="sort" data-sort="percent_done">Progress</button></div><button type="button" class="num" data-act="sort" data-sort="total_size">Size</button><button type="button" class="num" data-act="sort" data-sort="downloaded_ever">Downloaded</button><button type="button" class="num" data-act="sort" data-sort="rate_download">Down</button><button type="button" class="num" data-act="sort" data-sort="rate_upload">Up</button><button type="button" class="num" data-act="sort" data-sort="eta">ETA</button><button type="button" class="num" data-act="sort" data-sort="upload_ratio">Ratio</button></div>';
     return head + rows.map(rowHtml).join("");
   }
 
@@ -709,7 +737,7 @@
     var tabs = ["overview", "files", "peers", "trackers"].map(function (tab) {
       return '<button type="button" class="tab' + (state.tab === tab ? " active" : "") + '" data-act="tab" data-tab="' + tab + '">' + tab.charAt(0).toUpperCase() + tab.slice(1) + '</button>';
     }).join("");
-    return '<div class="inspector-head"><h2 class="clip" data-full="' + esc(name) + '">' + esc(name) + '</h2><button type="button" class="icon-btn inspector-close" data-act="close-inspector" aria-label="Close"><svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M4 4l8 8M12 4l-8 8" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></button></div><div class="inspector-actions"><button type="button" class="ghost" data-act="start">Start</button><button type="button" class="ghost" data-act="stop">Stop</button><button type="button" class="ghost" data-act="verify">Verify</button><button type="button" class="ghost" data-act="remove">Remove</button><button type="button" class="ghost" data-act="more">More</button></div><div class="tabs" role="tablist">' + tabs + '</div><div class="inspector-body">' + inspectorBody(detail) + '</div>';
+    return '<div class="inspector-head"><div class="inspector-title"><h2 class="clip" data-full="' + esc(name) + '">' + esc(name) + '</h2><p class="sub error clip" data-status-error' + (detail.error_string ? ' data-full="' + esc(detail.error_string) + '"' : " hidden") + '>' + esc(detail.error_string || "") + '</p></div><button type="button" class="icon-btn inspector-close" data-act="close-inspector" aria-label="Close"><svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M4 4l8 8M12 4l-8 8" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></button></div><div class="inspector-actions"><button type="button" class="ghost" data-act="start">Start</button><button type="button" class="ghost" data-act="stop">Stop</button><button type="button" class="ghost" data-act="verify">Verify</button><button type="button" class="ghost" data-act="remove">Remove</button><button type="button" class="ghost" data-act="more">More</button></div><div class="tabs" role="tablist">' + tabs + '</div><div class="inspector-body">' + inspectorBody(detail) + '</div>';
   }
   function inspectorBody(detail) {
     if (state.tab === "files") return filesHtml(detail);
@@ -741,7 +769,7 @@
     }
     if (state.sequentialSupported && "sequential_download" in detail) controls += checkTorrent("sequential_download", "Download in order", detail.sequential_download);
     var fraction = shownFraction(detail);
-    var progress = '<div class="inspector-progress"><span class="' + barClass(detail) + '" data-live-progress><span style="width:' + progressWidth(fraction) + '"></span></span><span class="pct" data-live-percent>' + esc(progressText(fraction)) + '</span></div>';
+    var progress = statusChip(detail) + '<div class="inspector-progress"><span class="' + barClass(detail) + '" data-live-progress><span style="width:' + progressWidth(fraction) + '"></span></span><span class="pct" data-live-percent>' + esc(progressText(fraction)) + '</span></div>';
     var legend = '<p class="piece-key"><span><i class="piece-missing"></i>Not downloaded</span><span><i class="piece-unavailable"></i>Not available</span><span><i class="piece-have"></i>Downloaded</span></p>';
     var pieces = detail.piece_count ? '<canvas class="pieces" aria-label="' + esc(pieceLabel(detail)) + '"></canvas>' + legend + '<p class="note" data-live-pieces>' + esc(pieceLabel(detail)) + '</p>' : "";
     var live = inspectorStats(detail);
@@ -1959,6 +1987,6 @@
     closeMobileDetail(true);
   });
 
-  if ("serviceWorker" in navigator) navigator.serviceWorker.register(location.origin + "/transmission/web/sw.js?v1.0.5").catch(function () {});
+  if ("serviceWorker" in navigator) navigator.serviceWorker.register(location.origin + "/transmission/web/sw.js?v1.0.8").catch(function () {});
   probe();
 })();

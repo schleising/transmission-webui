@@ -1,6 +1,6 @@
 /* Applies the saved colour, title, and appearance before the body is painted. */
 (function () {
-  var VERSION = "1.0.5";
+  var VERSION = "1.0.8";
   var DEFAULT_COLOUR = "#14756F";
   var DEFAULT_TITLE = "Transmission";
   var root = document.documentElement;
@@ -133,6 +133,9 @@
       "--soft": css(dark ? 0.32 : 0.93, cap(dark ? 0.04 : 0.03), H),
       "--emphasis": css(dark ? Math.min(0.86, best.L + 0.16) : Math.max(0.18, best.L - 0.12), best.C, H),
       "--muted-fill": css(dark ? 0.45 : 0.7, cap(0.02), H),
+      "--status-seed": css(dark ? Math.min(0.8, best.L + 0.14) : Math.min(0.64, Math.max(0.48, best.L + 0.14)), best.C, H),
+      "--status-queue": css(dark ? 0.62 : 0.58, Math.min(best.C, 0.06), H),
+      "--status-check": css(dark ? Math.min(0.86, best.L + 0.22) : Math.max(0.32, best.L - 0.08), best.C, H),
       "--scrim": dark ? "oklch(0.15 0.02 " + H.toFixed(2) + " / 0.62)" : "oklch(0.25 0.03 " + H.toFixed(2) + " / 0.42)"
     };
     Object.keys(tokens).forEach(function (key) { root.style.setProperty(key, tokens[key]); });

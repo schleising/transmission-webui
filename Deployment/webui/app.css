@@ -12,6 +12,9 @@
   --soft: #e3f3f1;
   --emphasis: #0c4a46;
   --muted-fill: #8aa8a4;
+  --status-seed: #3d8f88;
+  --status-queue: #6f9e99;
+  --status-check: #0c4f4b;
   --scrim: oklch(0.25 0.03 190 / 0.42);
   --font: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
   --mono: ui-monospace, "SF Mono", Menlo, monospace;
@@ -193,7 +196,7 @@ textarea { min-height: 120px; resize: vertical; }
 
 .head-row, .row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 5.6rem 5.6rem 5.6rem 4.6rem 3.6rem;
+  grid-template-columns: minmax(0, 1fr) 5.6rem 6.6rem 5.6rem 5.6rem 4.6rem 3.6rem;
   column-gap: 8px;
   row-gap: 4px;
   align-items: center;
@@ -218,15 +221,47 @@ html[style*="color-scheme: dark"] .head-row { background: var(--bg); }
   color: inherit;
 }
 .row.selected { background: var(--soft); }
-.row.complete { background: color-mix(in srgb, #2e7d32 12%, transparent); }
-.row.complete.selected { background: color-mix(in srgb, #2e7d32 22%, var(--soft)); }
 .row .progress-cell { grid-column: 1 / -1; }
 .progress-cell { display: flex; align-items: center; gap: 8px; width: 100%; min-width: 0; }
 .progress-cell .bar { flex: 1; min-width: 0; margin: 0; }
 .progress-cell .pct { flex: none; min-width: 4.8rem; text-align: right; }
 .sub { color: var(--muted); font-size: 12px; height: 16px; }
 .sub.error { color: var(--emphasis); }
+.name-line { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; min-width: 0; }
+.name-line .name { width: 100%; min-width: 0; }
 .name { font-weight: 600; }
+.status {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  min-height: 22px;
+  padding: 0 8px 0 6px;
+  border-radius: 99px;
+  background: color-mix(in srgb, var(--chip, var(--accent)) 22%, var(--surface));
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 650;
+  line-height: 1.2;
+}
+.status::before {
+  content: "";
+  width: 8px;
+  height: 8px;
+  border-radius: 99px;
+  background: var(--chip, var(--accent));
+  flex: none;
+}
+.status.downloading { --chip: var(--accent); }
+.status.seeding { --chip: var(--status-seed); }
+.status.queued { --chip: var(--status-queue); }
+.status.checking { --chip: var(--status-check); }
+.status.stopped { --chip: var(--muted-fill); }
+.status.error { --chip: var(--emphasis); }
+.inspector-title { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: flex-start; gap: 6px; }
+.inspector-title h2 { width: 100%; }
+.inspector-title .sub { margin: 0; }
 
 .bar {
   display: block;
@@ -237,14 +272,15 @@ html[style*="color-scheme: dark"] .head-row { background: var(--bg); }
   margin-bottom: 4px;
 }
 .bar > span { display: block; height: 100%; background: var(--accent); width: 0; }
+.bar.downloading > span { background: var(--accent); }
+.bar.seeding > span { background: var(--status-seed); }
+.bar.queued > span { background: var(--status-queue); }
+.bar.checking > span { background: var(--status-check); }
 .bar.stopped > span { background: var(--muted-fill); }
 .bar.error > span { background: var(--emphasis); }
-.bar.complete > span { background: #2e7d32; }
-.row.complete .pct, .inspector-progress .bar.complete + .pct { color: #1b5e20; font-weight: 650; }
-html[style*="color-scheme: dark"] .row.complete .pct,
-html[style*="color-scheme: dark"] .inspector-progress .bar.complete + .pct { color: #81c784; }
 .pct { color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
-.inspector-progress { display: flex; align-items: center; gap: 10px; margin: 4px 0 12px; }
+.inspector-progress { display: flex; align-items: center; gap: 10px; margin: 0 0 12px; }
+.inspector-body > .status { margin-bottom: 8px; }
 .inspector-progress .bar { flex: 1; margin: 0; }
 .inspector-progress .pct { flex: none; }
 
@@ -261,8 +297,8 @@ html[style*="color-scheme: dark"] .inspector-progress .bar.complete + .pct { col
 .card-meta { display: none; }
 
 .inspector-head, .inspector-actions, .tabs { padding: 12px 16px 0; }
-.inspector-head { display: flex; align-items: center; gap: 8px; }
-.inspector-head h2 { flex: 1; min-width: 0; margin: 0; }
+.inspector-head { display: flex; align-items: flex-start; gap: 8px; }
+.inspector-head h2 { margin: 0; }
 .inspector-close { display: grid; }
 .icon-btn {
   width: 36px;
@@ -437,14 +473,17 @@ canvas.pieces { display: block; width: 100%; height: auto; margin: 8px 0 4px; im
   .selecting .progress-cell { grid-column: 1 / -1; }
   .row > .num { display: none; }
   .progress-cell { width: 100%; }
+  .name-line { margin-bottom: 6px; }
   .card-meta {
-    display: flex;
-    gap: 10px;
+    display: grid;
+    grid-template-columns: max-content minmax(0, 1fr) max-content minmax(0, 1fr);
+    column-gap: 8px;
+    row-gap: 4px;
     color: var(--muted);
     font-size: 12px;
     font-variant-numeric: tabular-nums;
   }
-  .card-meta b { color: var(--text); font-weight: 600; }
+  .card-meta b { color: var(--text); font-weight: 600; white-space: nowrap; }
   .piece-key i { width: 16px; height: 16px; border-radius: 3px; }
 }
 
