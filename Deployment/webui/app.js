@@ -755,32 +755,35 @@
       return '<div class="file"><div class="clip" data-full="' + esc(file.name) + '">' + esc(file.name) + '</div><div class="muted" data-file-done="' + index + '">' + esc(Twui.formatBytes(done, state.units)) + " of " + esc(Twui.formatBytes(file.length, state.units)) + '</div><label class="check"><input type="checkbox" data-file="' + index + '"' + (wanted ? " checked" : "") + disabled + '> Download</label><label class="field">Priority<select data-priority="' + index + '"><option value="-1"' + (priority === -1 ? " selected" : "") + '>Low</option><option value="0"' + (priority === 0 ? " selected" : "") + '>Normal</option><option value="1"' + (priority === 1 ? " selected" : "") + '>High</option></select></label><button type="button" class="ghost" data-act="rename-file" data-path="' + esc(file.name) + '">Rename</button></div>';
     }).join("");
   }
+  function cardStat(label, value) {
+    return '<div><span>' + esc(label) + '</span><strong>' + esc(value) + '</strong></div>';
+  }
   function peersHtml(detail) {
     var from = detail.peers_from || {};
-    var breakdown = [["Tracker", from.from_tracker], ["Incoming", from.from_incoming], ["Cache", from.from_cache], ["DHT", from.from_dht], ["PEX", from.from_pex], ["LPD", from.from_lpd], ["LTEP", from.from_ltep]].map(function (item) {
-      return item[0] + " " + Twui.formatCount(item[1] || 0);
-    }).join(" · ");
-    var peers = detail.peers || [];
-    var note = "<p class='note'>" + esc(breakdown) + "</p>";
-    if (!peers.length) return "<p>No peers are connected.</p>" + note;
-    var head = [["Address", ""], ["Client", ""], ["Progress", " num"], ["Down", " num"], ["Up", " num"]].map(function (column) {
-      return '<span class="peer-head' + column[1] + '">' + column[0] + "</span>";
+    var sources = [["Tracker", from.from_tracker], ["Incoming", from.from_incoming], ["Cache", from.from_cache], ["DHT", from.from_dht], ["PEX", from.from_pex], ["LPD", from.from_lpd], ["LTEP", from.from_ltep]].map(function (item) {
+      return '<div class="source-card"><span>' + item[0] + '</span><strong>' + Twui.formatCount(item[1] || 0) + '</strong></div>';
     }).join("");
-    var rows = peers.map(function (peer) {
+    var peers = detail.peers || [];
+    var note = '<div class="source-grid">' + sources + '</div>';
+    if (!peers.length) return '<p>No peers are connected.</p>' + note;
+    var cards = peers.map(function (peer) {
       var address = peer.address || "";
       var full = address + (peer.is_encrypted ? " · encrypted" : "");
-      return '<span class="clip" data-full="' + esc(full) + '">' + esc(address) + '</span><span class="clip" data-full="' + esc(peer.client_name || "") + '">' + esc(peer.client_name || "") + '</span><span class="num">' + esc(Twui.formatPercent(peer.progress)) + '</span><span class="num">' + esc(Twui.formatSpeed(peer.rate_to_client, state.units)) + '</span><span class="num">' + esc(Twui.formatSpeed(peer.rate_to_peer, state.units)) + "</span>";
+      var client = peer.client_name || "";
+      var flag = peer.is_encrypted ? '<span class="flag">Encrypted</span>' : "";
+      return '<article class="peer-card"><div class="card-head"><div class="clip card-title" data-full="' + esc(full) + '">' + esc(address) + '</div>' + flag + '</div><div class="muted clip" data-full="' + esc(client) + '">' + esc(client) + '</div><div class="card-stats">' + cardStat("Progress", Twui.formatPercent(peer.progress)) + cardStat("Down", Twui.formatSpeed(peer.rate_to_client, state.units)) + cardStat("Up", Twui.formatSpeed(peer.rate_to_peer, state.units)) + '</div></article>';
     }).join("");
-    return note + '<div class="peer-grid">' + head + rows + "</div>";
+    return note + '<div class="card-grid">' + cards + '</div>';
   }
   function trackersHtml(detail) {
     var list = detail.tracker_stats || [];
-    var rows = list.map(function (tracker) {
+    var cards = list.map(function (tracker) {
       var text = tracker.announce || "";
       var result = tracker.last_announce_result || "No announce yet";
-      return '<div class="tracker"><div class="clip" data-full="' + esc(text) + '">' + esc(text) + '</div><div class="muted clip" data-full="' + esc(result) + '">' + esc(result) + " · " + Twui.formatCount(tracker.seeder_count || 0) + " seeding · " + Twui.formatCount(tracker.leecher_count || 0) + " downloading</div></div>";
+      return '<article class="tracker-card"><div class="clip card-title" data-full="' + esc(text) + '">' + esc(text) + '</div><div class="muted clip" data-full="' + esc(result) + '">' + esc(result) + '</div><div class="card-stats two">' + cardStat("Seeding", Twui.formatCount(tracker.seeder_count || 0)) + cardStat("Downloading", Twui.formatCount(tracker.leecher_count || 0)) + '</div></article>';
     }).join("");
-    return rows + '<label class="field">Announce URLs, one per line. A blank line starts a new tier.<textarea id="tracker-list"' + (state.pendingKeys.tracker_list ? " disabled" : "") + '>' + esc(detail.tracker_list || "") + '</textarea></label><button type="button" class="primary" data-act="save-trackers"' + (state.pendingKeys.tracker_list ? " disabled" : "") + ">Save trackers</button>";
+    var grid = cards ? '<div class="card-grid">' + cards + '</div>' : "";
+    return grid + '<label class="field">Announce URLs, one per line. A blank line starts a new tier.<textarea id="tracker-list"' + (state.pendingKeys.tracker_list ? " disabled" : "") + '>' + esc(detail.tracker_list || "") + '</textarea></label><button type="button" class="primary" data-act="save-trackers"' + (state.pendingKeys.tracker_list ? " disabled" : "") + ">Save trackers</button>";
   }
   function summaryHtml() {
     var ids = selectedIds();
@@ -1947,6 +1950,6 @@
     closeMobileDetail(true);
   });
 
-  if ("serviceWorker" in navigator) navigator.serviceWorker.register(location.origin + "/transmission/web/sw.js?v1.0.3").catch(function () {});
+  if ("serviceWorker" in navigator) navigator.serviceWorker.register(location.origin + "/transmission/web/sw.js?v1.0.4").catch(function () {});
   probe();
 })();

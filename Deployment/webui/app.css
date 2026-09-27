@@ -295,15 +295,29 @@ canvas.pieces { display: block; width: 100%; height: auto; margin: 8px 0 4px; im
 .piece-missing { background: #9a9a9a; }
 .piece-unavailable { background: #d32f2f; }
 .piece-have { background: #00c853; }
-.peer-grid {
-  display: grid;
-  grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr) 4.6rem 5.2rem 5.2rem;
-  column-gap: 12px;
-  align-items: center;
+.file { padding: 8px 0; border-bottom: 1px solid var(--line); min-width: 0; }
+.source-grid, .card-grid { display: grid; gap: 8px; margin: 0 0 12px; }
+.source-grid { grid-template-columns: repeat(auto-fit, minmax(4.6rem, 1fr)); }
+.card-grid { grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
+.source-card, .peer-card, .tracker-card {
+  min-width: 0;
+  background: var(--sunken);
+  border-radius: 10px;
 }
-.peer-grid > span { min-width: 0; padding: 8px 0; border-bottom: 1px solid var(--line); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.peer-head { color: var(--muted); font-size: 12px; }
-.file, .peer, .tracker { padding: 8px 0; border-bottom: 1px solid var(--line); min-width: 0; }
+.source-card { padding: 8px 10px; }
+.source-card span, .card-stats span {
+  display: block;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.2;
+}
+.source-card strong, .card-stats strong { font-variant-numeric: tabular-nums; font-weight: 650; }
+.peer-card, .tracker-card { display: grid; align-content: start; gap: 2px; padding: 12px; }
+.card-head { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.card-title { font-weight: 650; }
+.flag { flex: none; color: var(--muted); font-size: 11px; font-weight: 650; }
+.card-stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-top: 8px; }
+.card-stats.two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .swatches { display: flex; flex-wrap: wrap; gap: 8px; }
 .swatch { width: 44px; height: 44px; border-radius: 8px; border: 2px solid transparent; padding: 0; }
 .swatch.current { border-color: var(--text); }
@@ -422,10 +436,6 @@ canvas.pieces { display: block; width: 100%; height: auto; margin: 8px 0 4px; im
   .selecting .card-body { min-width: 0; }
   .selecting .progress-cell { grid-column: 1 / -1; }
   .row > .num { display: none; }
-  .peer-grid {
-    grid-template-columns: minmax(0, 1.3fr) minmax(0, 0.9fr) 3.4rem 4.6rem 4.6rem;
-    column-gap: 8px;
-  }
   .progress-cell { width: 100%; }
   .card-meta {
     display: flex;
