@@ -1,31 +1,24 @@
 # Transmission WebUI
 
-A browser interface for a [Transmission](https://transmissionbt.com/) daemon. It is a static page: it has no server of its own, and the only password is the one that daemon already requires. Transmission 4.1 or newer serves the page from `TRANSMISSION_WEB_HOME` and answers JSON-RPC 2.0 at `/transmission/rpc`.
+A browser interface for a [Transmission](https://transmissionbt.com/) daemon. Transmission serves the page itself. You sign in with the username and password that daemon already uses.
 
-The interface version is 1.0.16. Settings shows that version, and the daemon version once the session has been read. Copy on screen uses British spelling. RPC names stay as Transmission spells them.
+## What it does
 
-The behaviour of the page is written up in [Design/transmission-webui.md](Design/transmission-webui.md). The pictures in that folder are earlier mockups.
-
-## What you can do
-
-- Browse the torrent library, filter it, and search by name.
-- Add a `.torrent` file, a magnet link, or an HTTP URL.
-- Open one torrent for its progress, piece map, files, peers, and trackers. It opens on Overview. On a wide window, clicking that torrent again, or empty space in the list, closes it. On a phone, the browser back gesture returns to the list.
-- Start, stop, verify, reannounce, and remove torrents. A file can be renamed from the Files tab. Stop is how a torrent is paused. Removing can leave the files on disk, or delete them after a second confirmation.
-- Select several torrents and run one action on all of them.
-- Read session totals on Activity, and edit the daemon’s speed, download, seeding, connection, queue, blocklist, and bandwidth-group settings.
-- Choose a colour and a window title for this address, in this browser.
-- Install the page as an app. Each hostname installs separately.
-
-## Requirements
-
-- Transmission 4.1.0 or newer. On unlock the page reads `rpc_version_semver` and will not open the library below `6.0.0`.
-- RPC authentication turned on (`rpc-authentication-required`). If the daemon accepts a session with no password, the page explains that and does not show the library.
-- The page and `/transmission/rpc` on the same origin. A page loaded from one daemon never calls another daemon.
+- Shows your torrent library, with search, filters, and labels.
+- Adds a torrent file, a magnet link, or a web address.
+- Opens one torrent for its progress, piece map, files, peers, and trackers.
+- Starts, stops, verifies, reannounces, and removes torrents. Stop is how you pause. Removing can leave the files where they are, or delete them after a second confirmation.
+- Renames a file from the torrent’s Files tab.
+- Selects several torrents and runs one action on all of them.
+- Shows how much you have downloaded and uploaded, and edits the daemon’s speed, folders, seeding, connections, queue, blocklist, and bandwidth groups.
+- Remembers a colour and a window title for this address, in this browser.
+- Installs as an app. Each hostname is its own app.
 
 ## Install
 
-[v1.0.1](https://github.com/schleising/transmission-webui/releases/tag/v1.0.1) is the release to install. Copy `Deployment/webui` from that tag into the daemon’s web home. It repeats the first RPC call with the browser cookies when a sign-in gate redirects the cookieless probe.
+Use Transmission 4.1 or newer, with its remote password turned on. If the daemon accepts a connection with no password, the page asks you to turn that on and does not open the library.
+
+The latest published release is [v1.0.1](https://github.com/schleising/transmission-webui/releases/tag/v1.0.1).
 
 ```bash
 git clone https://github.com/schleising/transmission-webui.git
@@ -33,9 +26,9 @@ cd transmission-webui
 git checkout v1.0.1
 ```
 
-Copy the contents of `Deployment/webui` into the directory Transmission is using as `TRANSMISSION_WEB_HOME`. The copy must include the empty `default.json` in that directory. Leave it empty. It stops Transmission reporting a missing `default.json` at startup.
+Copy everything in `Deployment/webui` into the directory Transmission uses for its web interface. Keep the empty `default.json` in that copy, and leave it empty, so Transmission does not complain about a missing file when it starts.
 
-Point the daemon at that directory. With the linuxserver image:
+With the linuxserver image, point the container at that directory:
 
 ```yaml
 environment:
@@ -44,21 +37,21 @@ volumes:
   - /path/to/webui:/webui
 ```
 
-On a daemon you configure yourself, set `rpc-host-whitelist` to include each public hostname that will open the page. Localhost and IP addresses are already allowed, which covers opening the daemon’s own port.
+If you edit the daemon’s settings yourself, add each public hostname to `rpc-host-whitelist`. Opening the daemon by localhost or by an IP address already works.
 
-Open:
+Go to:
 
 ```text
 http://<hostname>:<port>/transmission/web/
 ```
 
-The browser asks for the RPC username and password before the page loads. After that, the library opens in the colour saved for this address in this browser. The default colour is `#14756F` and the default title is Transmission.
+The browser asks for the Transmission username and password before the page loads. The library then opens in the colour saved for this address, or in the default teal (`#14756F`) with the title Transmission.
 
-The page does not change the RPC password. That is not a session setting it can write.
+The Transmission password is changed in the daemon’s own configuration.
 
-### Remote access
+### On your own domain
 
-nginx only reverse-proxies. It does not keep a second copy of the HTML, CSS, or scripts. One server block per instance, TLS terminated on nginx, `proxy_pass` with no path of its own so `/transmission/web/` and `/transmission/rpc` reach the daemon unchanged. Forward `Authorization` and `X-Transmission-Session-Id` both ways, or every RPC call stays on `409` or `401`. The block, and why each header is there, is in [Design/transmission-webui.md](Design/transmission-webui.md) under Hosting.
+Use nginx as a reverse proxy, one site for each daemon, with TLS ended on nginx. Proxy `/transmission/` straight through to the daemon, and forward `Authorization` and `X-Transmission-Session-Id` in both directions.
 
 ```nginx
 server {
@@ -86,37 +79,28 @@ server {
 }
 ```
 
-Use your own `server_name` and upstream port. `client_max_body_size 16m` leaves room for a `.torrent` file sent as base64. Raise it if a larger file is rejected. Add the public hostname to that daemon’s `rpc-host-whitelist`.
+Use your own site name and port. The 16 megabyte limit leaves room for a torrent file. Raise it if a larger file is rejected. Add that public hostname to the daemon’s `rpc-host-whitelist`.
 
-## Usage
+## How to use
 
-The sidebar, or the bottom bar on a phone, has Torrents, Activity, and Settings. Session speeds sit at the bottom of the sidebar, and at the end of the header on a phone. The hostname under the title is the address you opened.
+Torrents, Activity, and Settings are in the sidebar, or on a bar along the bottom on a phone. Current speeds sit at the bottom of the sidebar, and at the end of the header on a phone. The name under the title is the address you opened.
 
-**Torrents.** Filter by name in the toolbar. That field does not offer previous entries. The sidebar and the chips list All, Downloading, Active, Seeding, Stopped, Finished, Checking, and Error. Labels on your torrents are listed after those, and choosing one shows only the torrents that carry it. Choosing the selected filter again, other than All, returns to All. Finished means the torrent’s `percent_done` is at least 1. Column headers sort the list. The percentage beside a bar shows two decimal places and does not read 100% until the torrent is complete. The status chip is on its own row under the name, and the progress bar uses that status colour. While a torrent is verifying, the bar and percentage show `recheck_progress`, then return to download progress. Size is the torrent’s total size, and Downloaded, to the right of Size on the desktop row, is how much has been downloaded. ETA uses the two largest units, so a long estimate reads as weeks and days, or days and hours, rather than hundreds of hours. An unknown estimate is ∞. In Details the chip is on the row above the progress bar. A finished row is not tinted green.
+**Torrents.** The toolbar is a name search and Add. The search box does not offer earlier searches. Along the side, or in a row of chips on a phone, you can show All, Downloading, Active, Seeding, Stopped, Finished, Checking, or Error. Any labels you have set are listed after those. Choosing the filter that is already selected, other than All, returns to All. Finished means the download is complete. Click a column heading to sort.
 
-Click a torrent to open it. On a wide window the inspector is a column beside the list. On a narrower window it replaces the list. The X closes it and clears the selection. Overview, Files, Peers, and Trackers are the four tabs, and each one loads when you open it. Overview includes the piece map: grey is not downloaded, red is not available, and green is downloaded.
+Each torrent shows its status under the name, and a progress bar in that colour. While Transmission is checking the files, the bar follows the check. Size is the whole torrent. Downloaded, beside Size on a wide window, is how much has been fetched so far. A long time remaining is shown in weeks and days, or in days and hours. When Transmission has no estimate, the time remaining is ∞.
 
-If a poll fails and the password is still accepted, the page returns to Torrents, clears the list, and shows Reconnecting in the centre until the connection returns. A message such as a duplicate add stays for three seconds and then clears.
+Click a torrent to open it. On a wide window it sits beside the list. Click it again, or click empty space in the list, to close it. On a phone it replaces the list, and the browser’s back gesture returns to the list. The X closes it. The tabs are Overview, Files, Peers, and Trackers. Overview includes the piece map: grey has not been downloaded, red is not available, and green has been downloaded.
 
-**Actions.** The toolbar is only the name filter and Add. Start, Stop, Verify, Remove, and More are on the inspector and on the menu. Right-click a row, or long-press it on a phone. If that row is part of a multi-selection, the menu applies to every selected torrent. Select on that menu starts multi-select. A banner shows how many are selected, and its X leaves the mode. More on the inspector does not offer Select.
+If the page loses the daemon, it returns to the torrent list and shows Reconnecting in the middle until the daemon answers. A short note, such as a torrent already being in the list, stays for three seconds.
 
-**Add.** Choose a `.torrent` file, or paste a magnet link or URL. The download directory starts as the session’s download directory, and the dialogue shows free space for the path you type.
+**Actions.** Right-click a torrent, or press and hold it on a phone, for Start, Stop, Verify, Remove, and further actions. The same actions are on the open torrent. When that torrent is part of a selection, the menu applies to every selected torrent. Select on the menu starts a selection, a banner counts how many are selected, and its X clears them.
 
-**Activity** shows the speeds and the session and cumulative totals. Active time is days, hours, and minutes. **Settings** edits the daemon. A control stays disabled while its write is in flight, and it changes only after Transmission accepts the write and a follow-up read returns the stored value.
+**Add.** Choose a torrent file, or paste a magnet link or address. The folder starts as the daemon’s download folder. The dialogue shows how much free space that folder has as you edit the path.
 
-**Appearance**, at the top of Settings, sets the base colour, the window title, and light, dark, or system. The colour and the title are remembered in this browser for this address. They are applied on this page when you save them, and the next time this browser opens this address. They are not copied to another browser or another phone. A grey has no hue to build from, so it is refused. Presets run around the hue wheel: `#9D174D`, `#8C3A3A`, `#C2410C`, `#CA8A04`, `#4D7C0F`, `#3D6B4F`, `#14756F`, `#0E7490`, `#1F4E79`, `#312E81`, `#5C4B8A`, and `#A21CAF`.
+**Activity** shows current speeds and the totals for this session and since the daemon was first used. Time spent active is given in days, hours, and minutes.
 
-The page can be installed. The service worker caches the app shell only. It does not cache `/transmission/rpc`.
+**Settings** changes the daemon. What you see updates after Transmission has stored the change. Settings also shows the interface version, and the Transmission version once the session has been read.
 
-## Repository
+**Appearance**, at the top of Settings, sets the colour, the window title, and light, dark, or system. The colour and the title stay in this browser for this address, and they are applied as soon as you save them. Another browser, or another phone, keeps its own. A grey is refused, because the page is built from one colour. A row of presets is there to choose from, and the default is `#14756F`.
 
-| Path | What it is |
-|---|---|
-| `Deployment/webui` | The files to install |
-| `Design/transmission-webui.md` | How the interface behaves |
-| `Testing/docker-compose.yml` | A local Transmission used while developing |
-| `Testing/webui-test` | The tree that compose bind-mounts. It is gitignored. After a change under `Deployment/webui`, copy that directory here |
-
-The test stack publishes port 9091 and sets `TRANSMISSION_WEB_HOME=/webui`. The RPC username and password are `USER` and `PASS` in the compose file. Open `http://127.0.0.1:9091/transmission/web/`.
-
-Static files are served with `?v` plus the interface version. After changing `Deployment/webui`, raise that version in `boot.js`, `sw.js`, `index.html`, `manifest.webmanifest`, and the service-worker registration in `app.js`, then copy the deployment tree into `Testing/webui-test`.
+From the browser you can install the page as an app. Install it once for each hostname you use.
