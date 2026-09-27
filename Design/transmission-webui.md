@@ -11,7 +11,7 @@ Target daemon: Transmission 4.1 or newer. The current release this design is wri
 - Sign-in uses Transmission’s RPC username and password. The interface stores no password of its own.
 - Every call is an HTTP POST to `/transmission/rpc`.
 - A `409` response yields a new `X-Transmission-Session-Id`. The client stores that value and sends the same request again with the header set.
-- While the library is open, the client polls `torrent_get` every 2 seconds for `id`, `name`, `status`, `percent_done`, `recheck_progress`, `rate_download`, `rate_upload`, `eta`, `total_size`, `downloaded_ever`, `upload_ratio`, and `error_string`.
+- While the library is open, the client polls `torrent_get` every 2 seconds for `id`, `name`, `status`, `percent_done`, `recheck_progress`, `rate_download`, `rate_upload`, `eta`, `total_size`, `downloaded_ever`, `upload_ratio`, `error_string`, and `labels`. The first read, and any read after the list has gone stale, asks for every torrent. Later reads ask for `recently_active` and keep the last row for torrents that are absent.
 - The same screen manages the session: add, start, stop, verify, reannounce, files, peers, trackers, labels, speed limits, and the rest of the session settings Transmission exposes.
 - The chrome is hues of one colour, including the favicon. A torrent’s progress bar and status chip use that hue, stepped by status. The piece map uses grey, red, and green, as set out below. Colour and page title are stored in this browser for this origin. They are not copied to another device. Light, dark, or system stays on the device.
 - Torrent status, speeds, and session facts are whatever Transmission last reported. A setting changes on screen only after the daemon accepts it and a follow-up read returns the new value.
@@ -86,7 +86,7 @@ The client calls the absolute path `/transmission/rpc`. From a page at `/transmi
 
 ### Interface version
 
-The interface version is `1.0.14`. Settings shows it as “Interface 1.0.14”, and adds the daemon version when `session_get` has returned one. The same string is the cache-busting query on every static file: `app.css?v1.0.14`, `app.js?v1.0.14`, `manifest.webmanifest?v1.0.14`, icon URLs, and `sw.js?v1.0.14`. The HTML links use that query. Raising the version changes every URL, and the service worker drops the previous cache when it activates. The latest published release tag is `v1.0.1`. A cookieless probe that is redirected to a sign-in page is retried with the browser cookies.
+The interface version is `1.0.15`. Settings shows it as “Interface 1.0.15”, and adds the daemon version when `session_get` has returned one. The same string is the cache-busting query on every static file: `app.css?v1.0.15`, `app.js?v1.0.15`, `manifest.webmanifest?v1.0.15`, icon URLs, and `sw.js?v1.0.15`. The HTML links use that query. Raising the version changes every URL, and the service worker drops the previous cache when it activates. The latest published release tag is `v1.0.1`. A cookieless probe that is redirected to a sign-in page is retried with the browser cookies.
 
 `Deployment/webui` also contains an empty `default.json`. Leave that file in the web home. It is there so Transmission does not report a missing `default.json` when it starts.
 
@@ -286,7 +286,7 @@ Rules for the `409` path:
 
 The client aborts a call that has not finished after 15 seconds so a stuck poll cannot pile up.
 
-`ids` in a torrent method may be an integer, a list of ids or hashes, or the string `recently_active`. Omitting `ids` means every torrent. Integer ids are not stable across a daemon restart. The interface uses them for the life of the page. After a restart the next poll replaces the list.
+`ids` in a torrent method may be an integer, a list of ids or hashes, or the string `recently_active`. Omitting `ids` means every torrent. A `recently_active` reply lists torrents that changed recently, and its `removed` array is torrent ids deleted since the previous `recently_active` call. A torrent that merely went idle is left out of `torrents` and is not listed in `removed`. Integer ids are not stable across a daemon restart. The interface uses them for the life of the page. After a restart the next poll replaces the list.
 
 ## 6. Polling
 
@@ -296,17 +296,17 @@ Each tick is numbered. A reply that belongs to an older tick is ignored, and tha
 
 On the Torrents view, a tick does these calls, in order:
 
-1. `torrent_get` with no `ids` (every torrent) and exactly these fields, in this order:
+1. One library `torrent_get`. The fields are always these, in this order:
 
-   `id`, `name`, `status`, `percent_done`, `recheck_progress`, `rate_download`, `rate_upload`, `eta`, `total_size`, `downloaded_ever`, `upload_ratio`, `error_string`
+   `id`, `name`, `status`, `percent_done`, `recheck_progress`, `rate_download`, `rate_upload`, `eta`, `total_size`, `downloaded_ever`, `upload_ratio`, `error_string`, `labels`
+
+   The first tick, the tick after the library was cleared, and any tick whose previous library read is more than 45 seconds old omit `ids` and replace the list. That covers a hidden tab or a stay on Activity or Settings long enough to miss the `recently_active` window. Otherwise, about every 30 seconds, the tick asks for `id` alone, drops ids that are gone, and follows with the library fields for ids that are new. Every other tick sets `ids` to `recently_active`. Torrents missing from that reply keep their last row. Ids in `removed` are deleted from the list, the selection, and the inspector. `labels` ride on this call. There is no second `torrent_get` for labels.
 
 2. `session_stats`, for the speeds and totals in the sidebar and on the activity page. `session_stats` is not added to the library fields.
 
-3. When the view is still Torrents, a `torrent_get` of `id` and `labels` only.
+3. When exactly one torrent is selected and the inspector is open (always on a wide window, and when the detail is open on a narrower window), a `torrent_get` for that id and the fields for the visible tab, as in section 9. Changing tab runs a tick immediately. The reply is merged onto the open torrent, so fields from another tab stay until they are read again.
 
-4. When exactly one torrent is selected and the inspector is open (always on a wide window, and when the detail is open on a narrower window), a `torrent_get` for that id and the detail fields in section 9.
-
-Activity and Settings do not request the torrent list or the labels. Those ticks call `session_stats` only. The field list on call 1 does not grow. Queue position, files, peers, and trackers stay on the detail call.
+Activity and Settings do not request the torrent list. Those ticks call `session_stats` only. Queue position, files, peers, trackers, and the piece map stay on the detail call.
 
 The list is built once at the end of the tick. An older tick does not paint the list on the way through.
 
@@ -316,12 +316,10 @@ sequenceDiagram
   participant RPC as /transmission/rpc
 
   loop Every 2 seconds on Torrents, while unlocked and visible
-    UI->>RPC: torrent_get with the library fields
-    RPC-->>UI: result.torrents
+    UI->>RPC: torrent_get library fields, recently_active once the list is current
+    RPC-->>UI: torrents, and removed when ids was recently_active
     UI->>RPC: session_stats
     RPC-->>UI: speeds and totals
-    UI->>RPC: torrent_get id and labels
-    RPC-->>UI: labels
   end
 ```
 
@@ -344,7 +342,8 @@ Example library request:
       "total_size",
       "downloaded_ever",
       "upload_ratio",
-      "error_string"
+      "error_string",
+      "labels"
     ]
   },
   "id": 41
@@ -477,9 +476,11 @@ One selected torrent opens an inspector on the Overview tab. On a wide window it
 
 ![The same torrent on a phone.](mockups/detail-mobile.png)
 
-Tabs: Overview, Files, Peers, Trackers. They are loaded together for that one id:
+Tabs: Overview, Files, Peers, Trackers. Every detail read asks for the scalars:
 
-`id`, `name`, `status`, `error`, `error_string`, `percent_done`, `percent_complete`, `recheck_progress`, `rate_download`, `rate_upload`, `eta`, `upload_ratio`, `total_size`, `size_when_done`, `have_valid`, `have_unchecked`, `downloaded_ever`, `uploaded_ever`, `left_until_done`, `download_dir`, `hash_string`, `is_private`, `comment`, `labels`, `queue_position`, `peers_connected`, `magnet_link`, `bandwidth_priority`, `honors_session_limits`, `download_limit`, `download_limited`, `upload_limit`, `upload_limited`, `seed_ratio_mode`, `seed_ratio_limit`, `seed_idle_mode`, `seed_idle_limit`, `peer_limit`, `group`, `sequential_download`, `sequential_download_from_piece`, `files`, `file_stats`, `wanted`, `priorities`, `peers`, `peers_from`, `trackers`, `tracker_stats`, `tracker_list`, `pieces`, `availability`, `piece_count`, `piece_size`.
+`id`, `name`, `status`, `error`, `error_string`, `percent_done`, `percent_complete`, `recheck_progress`, `rate_download`, `rate_upload`, `eta`, `upload_ratio`, `total_size`, `size_when_done`, `have_valid`, `have_unchecked`, `downloaded_ever`, `uploaded_ever`, `left_until_done`, `download_dir`, `hash_string`, `is_private`, `comment`, `labels`, `queue_position`, `peers_connected`, `magnet_link`, `bandwidth_priority`, `honors_session_limits`, `download_limit`, `download_limited`, `upload_limit`, `upload_limited`, `seed_ratio_mode`, `seed_ratio_limit`, `seed_idle_mode`, `seed_idle_limit`, `peer_limit`, `group`, `sequential_download`, `sequential_download_from_piece`, `piece_count`, `piece_size`.
+
+The visible tab adds its own fields. Overview adds `pieces` and `availability`. Files adds `files`, `file_stats`, `wanted`, and `priorities`. Peers adds `peers` and `peers_from`. Trackers adds `trackers`, `tracker_stats`, and `tracker_list`. A tab that has not been read yet says “Reading…”. Switching tabs fetches that tab at once.
 
 `error` is 0 when fine, 1 for a tracker warning, 2 for a tracker error, and 3 for a local error. The visible text is `error_string`. On Transmission 4.1 and newer, `wanted` is a boolean array. If the daemon rejects `sequential_download`, that field is dropped and the ordered-download control is hidden.
 
@@ -715,7 +716,7 @@ The interface is ready when all of the following hold.
 1. With RPC authentication enabled, a wrong password stays on the lock screen and a right password opens the library. With authentication disabled, the library stays hidden and the page says to turn authentication on.
 2. The password is absent from `localStorage`, `sessionStorage`, and the URL after unlock, after lock, and after a reload.
 3. The first RPC call of a fresh page receives `409`, stores `X-Transmission-Session-Id`, and retries once with that header. A second `409` on the same call does not retry again. Through nginx, that header is forwarded on the request and returned on the `409`.
-4. A captured library request is JSON-RPC 2.0: `jsonrpc`, `method` `torrent_get`, `params.fields` exactly `id`, `name`, `status`, `percent_done`, `recheck_progress`, `rate_download`, `rate_upload`, `eta`, `total_size`, `downloaded_ever`, `upload_ratio`, `error_string`, and an `id`. The next one starts about 2 seconds later while the tab is visible. A daemon whose `rpc_version_semver` is below `6.0.0` never shows the library.
+4. A captured library request is JSON-RPC 2.0: `jsonrpc`, `method` `torrent_get`, `params.fields` exactly `id`, `name`, `status`, `percent_done`, `recheck_progress`, `rate_download`, `rate_upload`, `eta`, `total_size`, `downloaded_ever`, `upload_ratio`, `error_string`, `labels`, and an `id`. The first request omits `ids`. Once that list is current, a steady poll sets `ids` to `recently_active` and does not send a second `torrent_get` for labels. The next one starts about 2 seconds later while the tab is visible. A daemon whose `rpc_version_semver` is below `6.0.0` never shows the library.
 5. Hiding the tab stops the poll. Showing it polls immediately.
 6. A `401` during a poll returns to the lock screen and drops the torrent list from the page.
 7. Add by file and add by magnet both call `torrent_add`. Remove, remove-and-delete, start, stop, and verify call the methods in the tables above. Stop is the pause action. Selecting several torrents sends one call with those `ids`.

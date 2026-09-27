@@ -1,7 +1,9 @@
 (function () {
-  var LIBRARY_FIELDS = ["id", "name", "status", "percent_done", "recheck_progress", "rate_download", "rate_upload", "eta", "total_size", "downloaded_ever", "upload_ratio", "error_string"];
+  var LIBRARY_FIELDS = ["id", "name", "status", "percent_done", "recheck_progress", "rate_download", "rate_upload", "eta", "total_size", "downloaded_ever", "upload_ratio", "error_string", "labels"];
+  var LIBRARY_STALE_MS = 45000;
+  var CENSUS_MS = 30000;
   var UNLOCK_FIELDS = ["rpc_version_semver", "version", "units", "download_dir", "start_added_torrents"];
-  var DETAIL_FIELDS = ["id", "name", "status", "error", "error_string", "percent_done", "percent_complete", "recheck_progress", "rate_download", "rate_upload", "eta", "upload_ratio", "total_size", "size_when_done", "have_valid", "have_unchecked", "downloaded_ever", "uploaded_ever", "left_until_done", "download_dir", "hash_string", "is_private", "comment", "labels", "queue_position", "peers_connected", "magnet_link", "bandwidth_priority", "honors_session_limits", "download_limit", "download_limited", "upload_limit", "upload_limited", "seed_ratio_mode", "seed_ratio_limit", "seed_idle_mode", "seed_idle_limit", "peer_limit", "group", "sequential_download", "sequential_download_from_piece", "files", "file_stats", "wanted", "priorities", "peers", "peers_from", "trackers", "tracker_stats", "tracker_list", "pieces", "availability", "piece_count", "piece_size"];
+  var DETAIL_CORE = ["id", "name", "status", "error", "error_string", "percent_done", "percent_complete", "recheck_progress", "rate_download", "rate_upload", "eta", "upload_ratio", "total_size", "size_when_done", "have_valid", "have_unchecked", "downloaded_ever", "uploaded_ever", "left_until_done", "download_dir", "hash_string", "is_private", "comment", "labels", "queue_position", "peers_connected", "magnet_link", "bandwidth_priority", "honors_session_limits", "download_limit", "download_limited", "upload_limit", "upload_limited", "seed_ratio_mode", "seed_ratio_limit", "seed_idle_mode", "seed_idle_limit", "peer_limit", "group", "sequential_download", "sequential_download_from_piece", "piece_count", "piece_size"];
   var SESSION_FIELDS = ["speed_limit_down", "speed_limit_down_enabled", "speed_limit_up", "speed_limit_up_enabled", "alt_speed_down", "alt_speed_up", "alt_speed_enabled", "alt_speed_time_enabled", "alt_speed_time_begin", "alt_speed_time_end", "alt_speed_time_day", "download_dir", "incomplete_dir", "incomplete_dir_enabled", "start_added_torrents", "rename_partial_files", "trash_original_torrent_files", "script_torrent_done_filename", "script_torrent_done_enabled", "script_torrent_added_filename", "script_torrent_added_enabled", "script_torrent_done_seeding_filename", "script_torrent_done_seeding_enabled", "seed_ratio_limited", "seed_ratio_limit", "idle_seeding_limit_enabled", "idle_seeding_limit", "peer_port", "peer_port_random_on_start", "port_forwarding_enabled", "encryption", "peer_limit_global", "peer_limit_per_torrent", "dht_enabled", "pex_enabled", "lpd_enabled", "preferred_transports", "download_queue_enabled", "download_queue_size", "seed_queue_enabled", "seed_queue_size", "queue_stalled_enabled", "queue_stalled_minutes", "blocklist_enabled", "blocklist_url", "blocklist_size", "version", "rpc_version_semver", "units"];
   var STATUS = ["Stopped", "Queued to verify", "Verifying", "Queued to download", "Downloading", "Queued to seed", "Seeding"];
   var FILTERS = [["all", "All"], ["downloading", "Downloading"], ["active", "Active"], ["seeding", "Seeding"], ["stopped", "Stopped"], ["finished", "Finished"], ["checking", "Checking"], ["error", "Error"]];
@@ -58,6 +60,9 @@
     groups: null,
     groupsTried: false,
     sequentialSupported: true,
+    libraryTouched: 0,
+    censusAt: 0,
+    detailStale: false,
     freeSpace: "",
     portResult: "",
     blocklistNote: "",
@@ -498,6 +503,8 @@
     state.selected = new Set();
     state.detail = null;
     state.loaded = false;
+    state.libraryTouched = 0;
+    state.censusAt = 0;
     state.stats = null;
     showLock();
   }
@@ -555,7 +562,74 @@
         }
       }
       if (!found) state.torrents.push(torrent);
+      state.labels.set(torrent.id, torrent.labels || []);
+      applyLibraryTorrent(torrent);
     });
+  }
+  function rememberLabels() {
+    state.labels = new Map();
+    state.torrents.forEach(function (torrent) {
+      state.labels.set(torrent.id, torrent.labels || []);
+    });
+  }
+  function dropTorrent(id) {
+    state.torrents = state.torrents.filter(function (torrent) { return torrent.id !== id; });
+    state.labels.delete(id);
+    state.selected.delete(id);
+    if (state.anchor === id) state.anchor = null;
+    if (state.detail && state.detail.id === id) {
+      state.detail = null;
+      state.detailOpen = false;
+    }
+  }
+  function pruneMissing() {
+    var alive = {};
+    state.torrents.forEach(function (torrent) { alive[torrent.id] = true; });
+    Array.from(state.selected).forEach(function (id) {
+      if (!alive[id]) state.selected.delete(id);
+    });
+    if (state.detail && !alive[state.detail.id]) {
+      state.detail = null;
+      state.detailOpen = false;
+    }
+  }
+  function libraryMode() {
+    var now = Date.now();
+    if (!state.libraryTouched || now - state.libraryTouched > LIBRARY_STALE_MS) return "full";
+    if (now - state.censusAt >= CENSUS_MS) return "census";
+    return "active";
+  }
+  function libraryParams(mode) {
+    if (mode === "census") return { fields: ["id"] };
+    if (mode === "active") return { ids: "recently_active", fields: LIBRARY_FIELDS };
+    return { fields: LIBRARY_FIELDS };
+  }
+  function takeLibrary(mode, result) {
+    var now = Date.now();
+    var list = result.torrents || [];
+    var missing = [];
+    if (mode === "full") {
+      state.torrents = list;
+      state.libraryTouched = now;
+      state.censusAt = now;
+    } else if (mode === "census") {
+      var alive = {};
+      list.forEach(function (torrent) { alive[torrent.id] = true; });
+      state.torrents = state.torrents.filter(function (torrent) { return alive[torrent.id]; });
+      list.forEach(function (torrent) {
+        if (!byId(torrent.id)) missing.push(torrent.id);
+      });
+      state.censusAt = now;
+      state.libraryTouched = now;
+    } else {
+      mergeTorrents(list);
+      (result.removed || []).forEach(dropTorrent);
+      state.libraryTouched = now;
+    }
+    rememberLabels();
+    state.torrents.forEach(applyLibraryTorrent);
+    pruneMissing();
+    return missing;
   }
   function watchPending() {
     if (!state.pendingWatch) return;
@@ -573,35 +647,35 @@
     if (state.mode !== "live" || document.hidden || state.inFlight) return;
     var generation = pollGeneration;
     var fetchLibrary = state.view === "torrents";
+    var mode = fetchLibrary ? libraryMode() : "";
+    var askedTab = null;
     state.inFlight = true;
-    var chain = fetchLibrary ? Twui.rpc("torrent_get", { fields: LIBRARY_FIELDS }) : Promise.resolve(null);
+    var chain = fetchLibrary ? Twui.rpc("torrent_get", libraryParams(mode)) : Promise.resolve(null);
     chain.then(function (list) {
       if (generation !== pollGeneration) return null;
-      if (list) {
-        state.torrents = list.torrents || [];
-        state.torrents.forEach(applyLibraryTorrent);
-        var alive = new Set(state.torrents.map(function (torrent) { return torrent.id; }));
-        Array.from(state.selected).forEach(function (id) { if (!alive.has(id)) state.selected.delete(id); });
-        state.loaded = true;
-      }
+      if (!list) return null;
+      var missing = takeLibrary(mode, list);
+      state.loaded = true;
+      if (!missing.length) return null;
+      return Twui.rpc("torrent_get", { ids: missing, fields: LIBRARY_FIELDS }).then(function (extra) {
+        if (generation !== pollGeneration || !extra) return null;
+        mergeTorrents(extra.torrents || []);
+        rememberLabels();
+      });
+    }).then(function () {
+      if (generation !== pollGeneration) return null;
       return Twui.rpc("session_stats", {});
     }).then(function (stats) {
       if (generation !== pollGeneration || !stats) return null;
       state.stats = stats;
       state.reconnecting = false;
-      if (state.view !== "torrents") return null;
-      return Twui.rpc("torrent_get", { fields: ["id", "labels"] });
-    }).then(function (labelled) {
-      if (generation !== pollGeneration) return null;
-      if (labelled) {
-        state.labels = new Map();
-        (labelled.torrents || []).forEach(function (torrent) { state.labels.set(torrent.id, torrent.labels || []); });
-      }
       if (!detailWanted()) return null;
+      askedTab = state.tab;
       return fetchDetail(onlyId());
     }).then(function (detail) {
       if (generation !== pollGeneration) return;
-      if (detail && detail.torrents && detail.torrents[0]) state.detail = detail.torrents[0];
+      if (detail && detail.torrents && detail.torrents[0]) storeDetail(detail.torrents[0]);
+      if (askedTab != null) state.detailStale = state.tab !== askedTab;
       watchPending();
       paintLive();
     }, function (error) {
@@ -614,15 +688,38 @@
     }).then(function () {
       if (generation !== pollGeneration) return;
       state.inFlight = false;
+      if (state.detailStale && state.mode === "live" && !document.hidden) {
+        state.detailStale = false;
+        tick();
+        return;
+      }
       if (!fetchLibrary && state.view === "torrents" && state.mode === "live" && !document.hidden) tick();
     });
   }
+  function detailFields() {
+    var fields = DETAIL_CORE.slice();
+    if (state.tab === "overview") fields.push("pieces", "availability");
+    else if (state.tab === "files") fields.push("files", "file_stats", "wanted", "priorities");
+    else if (state.tab === "peers") fields.push("peers", "peers_from");
+    else if (state.tab === "trackers") fields.push("trackers", "tracker_stats", "tracker_list");
+    if (!state.sequentialSupported) fields = fields.filter(function (field) { return field !== "sequential_download"; });
+    return fields;
+  }
+  function storeDetail(torrent) {
+    if (!torrent) return;
+    if (!state.detail || state.detail.id !== torrent.id) state.detail = torrent;
+    else Object.keys(torrent).forEach(function (key) { state.detail[key] = torrent[key]; });
+    if ("labels" in torrent) {
+      state.labels.set(torrent.id, torrent.labels || []);
+      var row = byId(torrent.id);
+      if (row) row.labels = torrent.labels || [];
+    }
+  }
   function fetchDetail(id) {
-    return Twui.rpc("torrent_get", { ids: [id], fields: DETAIL_FIELDS }).then(null, function (error) {
+    return Twui.rpc("torrent_get", { ids: [id], fields: detailFields() }).then(null, function (error) {
       if (!(error.info && error.info.rpc) || !state.sequentialSupported) throw error;
       state.sequentialSupported = false;
-      var fields = DETAIL_FIELDS.filter(function (field) { return field !== "sequential_download"; });
-      return Twui.rpc("torrent_get", { ids: [id], fields: fields });
+      return Twui.rpc("torrent_get", { ids: [id], fields: detailFields() });
     });
   }
   function startPoll() {
@@ -782,7 +879,8 @@
     return '<label class="field check"><input type="checkbox" data-torrent="' + key + '"' + (checked ? " checked" : "") + (state.pendingKeys[key] ? " disabled" : "") + "> " + label + "</label>";
   }
   function filesHtml(detail) {
-    var files = detail.files || [];
+    if (!detail.files) return '<p class="note">Reading…</p>';
+    var files = detail.files;
     var stats = detail.file_stats || [];
     if (!files.length) return '<p class="note">This torrent has no files.</p>';
     return files.map(function (file, index) {
@@ -798,6 +896,7 @@
     return '<div><span>' + esc(label) + '</span><strong>' + esc(value) + '</strong></div>';
   }
   function peersHtml(detail) {
+    if (!detail.peers) return '<p class="note">Reading…</p>';
     var from = detail.peers_from || {};
     var sources = [["Tracker", from.from_tracker], ["Incoming", from.from_incoming], ["Cache", from.from_cache], ["DHT", from.from_dht], ["PEX", from.from_pex], ["LPD", from.from_lpd], ["LTEP", from.from_ltep]].map(function (item) {
       return '<div class="source-card"><span>' + item[0] + '</span><strong>' + Twui.formatCount(item[1] || 0) + '</strong></div>';
@@ -815,7 +914,8 @@
     return note + '<div class="card-grid">' + cards + '</div>';
   }
   function trackersHtml(detail) {
-    var list = detail.tracker_stats || [];
+    if (!detail.tracker_stats) return '<p class="note">Reading…</p>';
+    var list = detail.tracker_stats;
     var cards = list.map(function (tracker) {
       var text = tracker.announce || "";
       var result = tracker.last_announce_result || "No announce yet";
@@ -1130,6 +1230,8 @@
     state.pendingAction = null;
     state.pendingWatch = null;
     state.loaded = true;
+    state.libraryTouched = 0;
+    state.censusAt = 0;
     state.view = "torrents";
     if (detailPushed) {
       detailPushed = false;
@@ -1216,7 +1318,7 @@
     Twui.rpc("torrent_set", params).then(function () {
       return fetchDetail(id);
     }).then(function (result) {
-      if (result.torrents && result.torrents[0]) state.detail = result.torrents[0];
+      if (result.torrents && result.torrents[0]) storeDetail(result.torrents[0]);
       showStatus("");
     }, function (error) {
       if (error.info && error.info.locked) return lock();
@@ -1378,7 +1480,16 @@
           state.anchor = added.id;
           if (state.detailOpen) pushDetailHistory();
         }
-        tick();
+        var addedId = added && added.id != null && !result.torrent_duplicate ? added.id : null;
+        if (addedId == null) {
+          tick();
+          return;
+        }
+        Twui.rpc("torrent_get", { ids: [addedId], fields: LIBRARY_FIELDS }).then(function (extra) {
+          mergeTorrents((extra && extra.torrents) || []);
+          rememberLabels();
+          paintLive();
+        }, function () {}).then(function () { tick(); });
       }, function (err) {
         if (err.info && err.info.locked) return lock();
         if (error) error.textContent = err.message;
@@ -1406,6 +1517,8 @@
     leaveSelectMode();
     paintLive();
     Twui.rpc("torrent_remove", { ids: ids, delete_local_data: deleteFiles }).then(function () {
+      ids.forEach(dropTorrent);
+      rememberLabels();
       state.pendingAction = null;
       state.selected = new Set();
       state.detail = null;
@@ -1553,7 +1666,7 @@
       pushDetailHistory();
       paintLive();
       fetchDetail(id).then(function (result) {
-        if (result.torrents && result.torrents[0]) state.detail = result.torrents[0];
+        if (result.torrents && result.torrents[0]) storeDetail(result.torrents[0]);
         paintLive();
       }, function (error) {
         if (error.info && error.info.locked) lock();
@@ -1578,7 +1691,7 @@
     if (state.selected.size === 1) {
       state.detail = null;
       fetchDetail(id).then(function (result) {
-        if (result.torrents && result.torrents[0]) state.detail = result.torrents[0];
+        if (result.torrents && result.torrents[0]) storeDetail(result.torrents[0]);
         paintLive();
       }, function () {});
     }
@@ -1703,6 +1816,10 @@
     if (name === "tab") {
       state.tab = act.dataset.tab;
       paintLive();
+      if (detailWanted()) {
+        if (state.inFlight) state.detailStale = true;
+        else tick();
+      }
       return;
     }
     if (ACTIONS[name] || name === "remove" || name === "location") {
@@ -1725,7 +1842,7 @@
         if (ids.length === 1) return fetchDetail(ids[0]);
         return null;
       }).then(function (result) {
-        if (result && result.torrents && result.torrents[0]) state.detail = result.torrents[0];
+        if (result && result.torrents && result.torrents[0]) storeDetail(result.torrents[0]);
         paintLive();
       }, function (error) {
         if (error.info && error.info.locked) return lock();
@@ -1751,7 +1868,7 @@
       Twui.rpc("torrent_rename_path", { ids: [id], path: path, name: next }).then(function () {
         return fetchDetail(id);
       }).then(function (result) {
-        if (result.torrents && result.torrents[0]) state.detail = result.torrents[0];
+        if (result.torrents && result.torrents[0]) storeDetail(result.torrents[0]);
         tick();
       }, function (error) {
         if (error.info && error.info.locked) return lock();
@@ -2040,6 +2157,6 @@
     closeMobileDetail(true);
   });
 
-  if ("serviceWorker" in navigator) navigator.serviceWorker.register(location.origin + "/transmission/web/sw.js?v1.0.14").catch(function () {});
+  if ("serviceWorker" in navigator) navigator.serviceWorker.register(location.origin + "/transmission/web/sw.js?v1.0.15").catch(function () {});
   probe();
 })();
