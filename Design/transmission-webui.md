@@ -86,7 +86,7 @@ The client calls the absolute path `/transmission/rpc`. From a page at `/transmi
 
 ### Interface version
 
-The interface version is `1.0.9`. Settings shows it as “Interface 1.0.9”, and adds the daemon version when `session_get` has returned one. The same string is the cache-busting query on every static file: `app.css?v1.0.9`, `app.js?v1.0.9`, `manifest.webmanifest?v1.0.9`, icon URLs, and `sw.js?v1.0.9`. The HTML links use that query. Raising the version changes every URL, and the service worker drops the previous cache when it activates. The latest published release tag is `v1.0.1`. A cookieless probe that is redirected to a sign-in page is retried with the browser cookies.
+The interface version is `1.0.10`. Settings shows it as “Interface 1.0.10”, and adds the daemon version when `session_get` has returned one. The same string is the cache-busting query on every static file: `app.css?v1.0.10`, `app.js?v1.0.10`, `manifest.webmanifest?v1.0.10`, icon URLs, and `sw.js?v1.0.10`. The HTML links use that query. Raising the version changes every URL, and the service worker drops the previous cache when it activates. The latest published release tag is `v1.0.1`. A cookieless probe that is redirected to a sign-in page is retried with the browser cookies.
 
 `Deployment/webui` also contains an empty `default.json`. Leave that file in the web home. It is there so Transmission does not report a missing `default.json` when it starts.
 
@@ -259,7 +259,7 @@ flowchart TD
   ok[Return the result object]
   lock[Clear the password and show the lock screen]
   rpcErr[Show error.message]
-  down[Keep the last good data and mark reconnecting]
+  down[Clear the library, return to Torrents, and mark reconnecting]
 
   build --> have
   have -->|yes| send
@@ -388,6 +388,7 @@ The page keeps the raw numbers from RPC. Everything drawn on screen is formatted
 | `recheck_progress` on the inspector’s “Verifying” line, peer progress | A whole-number percentage from the 0–1 fraction. |
 | `upload_ratio` | Two decimal places. |
 | `eta` and other durations | Hours and minutes, or seconds when the duration is under a minute. Any `eta` below 0 is ∞. |
+| `seconds_active` on Activity | Days, hours, and minutes. A zero unit is left out. Under a minute is `0 min`. |
 | Unix timestamps | The local date and time. |
 | Counts | Grouped digits. |
 
@@ -395,7 +396,7 @@ While the Torrents view is open, the labels call above runs on the same 2 second
 
 While exactly one torrent is open in the inspector, the detail call on the same tick asks for that id and the detail fields in section 9. A multi-selection does not fetch peers or files. The overview is not rebuilt from scratch on every tick: when the torrent, the tab, and the shape of that view are unchanged, the speeds, progress, and piece map are updated in place. The piece canvas is left as it is when `pieces` and `availability` are unchanged. A new torrent often has no piece count on the first read. When the piece count, name, or hash arrives, the overview is built again and the piece map is drawn.
 
-A failed tick keeps the last list on screen and shows a reconnecting state. The next tick is still 2 seconds later. `401` leaves that path and locks.
+A failed tick clears the torrent list, selection, and open torrent, returns to the Torrents page, and shows Reconnecting in the centre of the list. The next tick is still 2 seconds later. A successful tick fills the list again. `401` leaves that path and locks.
 
 ## 7. The server is the record
 
@@ -532,11 +533,11 @@ The dialogue accepts a `.torrent` file or a magnet link or HTTP URL.
 - “Start immediately” maps to `paused`, inverted. The initial checkbox follows `start_added_torrents`.
 - Labels are sent on `torrent_add`.
 
-Either `filename` or `metainfo` is required. A duplicate comes back as `result.torrent_duplicate` with no `error` object. The page says the torrent is already present and selects it.
+Either `filename` or `metainfo` is required. A duplicate comes back as `result.torrent_duplicate` with no `error` object. The page says the torrent is already present, selects it, and clears that message after three seconds.
 
 ## 10. Activity and session settings
 
-Activity reads `session_stats`: `download_speed`, `upload_speed`, `active_torrent_count`, `paused_torrent_count`, `torrent_count`, plus `current_stats` and `cumulative_stats` (`downloaded_bytes`, `uploaded_bytes`, `files_added`, `seconds_active`, `session_count`). Those numbers are already refreshed by the 2 second tick. The wide layout also shows the current speeds at the bottom of the sidebar on every section. Speeds and byte totals are formatted with `units`, as in section 6.
+Activity reads `session_stats`: `download_speed`, `upload_speed`, `active_torrent_count`, `paused_torrent_count`, `torrent_count`, plus `current_stats` and `cumulative_stats` (`downloaded_bytes`, `uploaded_bytes`, `files_added`, `seconds_active`, `session_count`). Those numbers are already refreshed by the 2 second tick. Active time is days, hours, and minutes. The wide layout also shows the current speeds at the bottom of the sidebar on every section. Speeds and byte totals are formatted with `units`, as in section 6.
 
 Settings reads `session_get` when the section opens and again after each successful `session_set`. It does not poll the whole session every 2 seconds. Each control shows the value from that read. Changing a control sends `session_set`, disables that control, then `session_get` for the keys that were written, and the control updates from that second read, as in section 7.
 
@@ -563,7 +564,7 @@ Wire keys are the JSON-RPC 2.0 snake_case names. Copy them as written.
 
 ## 11. Layout
 
-The page is a full-screen app. `html` and `body` are `height: 100dvh` and `overflow: hidden`. The app grid fills that box. Scrolling happens inside the library list, the inspector body, settings, the filter list, menus, and a long truncation popup. Those regions use `overscroll-behavior: contain`. The document itself does not scroll.
+The page is a full-screen app. `html` and `body` are `height: 100dvh` and `overflow: hidden`. The app grid fills that box. Scrolling happens inside the library list, the inspector body, settings, the filter list, menus, and a long truncation popup. The document itself does not scroll. The library list, the inspector body, and the filter list scroll on the vertical axis only. Horizontal overscroll is left to the browser, so a two-finger swipe can go back or forward. Menus, dialogues, and truncation popups use `overscroll-behavior: contain`.
 
 Structure is CSS flex and grid. Floats are not used. `position` is not used to place columns, toolbars, or cards. The modal scrim is the exception: it is `position: fixed` and covers the viewport, and its contents are centred with grid (`place-items: center`). Menus and truncation popups are also positioned against the pressed row, inside the app.
 
@@ -591,7 +592,7 @@ Touch targets that are tapped are at least 44px on the short side. Rows on a wid
 
 The viewport is `width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no`, and the root uses `touch-action: manipulation`, so the page does not pinch-zoom or double-tap zoom. Displayed text uses `user-select: none` and `-webkit-user-select: none`. Fields that are typed into keep a caret, so a password or a path can still be entered. This is a deliberate limit: the page cannot be zoomed, and torrent names cannot be selected. Targets stay at least 44px so the phone layout remains usable at the browser’s own scale.
 
-The reconnecting banner sits above the list and does not cover the last row. Empty library: “No torrents yet”, with Add only in the toolbar. Empty filter: “Nothing in this filter” and a way back to All.
+Reconnecting and an empty library (“No torrents yet”) are centred in the list, both ways. They stay until the situation changes. Other status text, such as a duplicate add or an action error, is shown and then cleared after three seconds. Empty filter: “Nothing in this filter” and a way back to All. Add stays in the toolbar.
 
 ## 12. Colour and title
 
@@ -687,11 +688,11 @@ The service worker is registered at `/transmission/web/sw.js?vX.Y.Z`, so its sco
 
 | Situation | Behaviour |
 |---|---|
-| Poll fails, password still good | Keep the last list. Show reconnecting. Retry on the next tick. |
+| Poll fails, password still good | Clear the torrent list and any open torrent, return to Torrents, and show Reconnecting in the centre of the list. Retry on the next tick. |
 | `401` | Lock, clear the list from memory, clear the password. |
-| `409` twice on one call | Reconnecting, with the last list kept. |
+| `409` twice on one call | Reconnecting, with the torrent list cleared. |
 | HTTP `200` with an `error` object | Show `error.message` on the action that caused it, plus `error.data.error_string` when it is present. Leave the last accepted values in place and enable the control again. |
-| Add finds a duplicate | Say it is already there and select that torrent. |
+| Add finds a duplicate | Say it is already there, select that torrent, and clear the message after three seconds. |
 | A method is unknown | Hide the control that called it. |
 | Tab in the background | Do not poll. Poll once when it is visible again. |
 

@@ -69,6 +69,20 @@
     return minutes + " min";
   };
 
+  Twui.formatActiveTime = function (seconds) {
+    var n = Number(seconds);
+    if (!Number.isFinite(n) || n < 0) n = 0;
+    var minutes = Math.floor(n / 60);
+    var days = Math.floor(minutes / 1440);
+    var hours = Math.floor((minutes % 1440) / 60);
+    minutes = minutes % 60;
+    var parts = [];
+    if (days) parts.push(days + (days === 1 ? " day" : " days"));
+    if (hours) parts.push(hours + " hr");
+    if (minutes || !parts.length) parts.push(minutes + " min");
+    return parts.join(" ");
+  };
+
   Twui.formatWhen = function (unix) {
     var n = Number(unix);
     if (!Number.isFinite(n) || n <= 0) return "—";

@@ -608,8 +608,9 @@
       if (generation !== pollGeneration) return;
       if (error.info && error.info.locked) return lock();
       if (error.info && error.info.legacy) return failOld();
+      returnToLibrary();
       state.reconnecting = true;
-      paintBanner();
+      paintLive();
     }).then(function () {
       if (generation !== pollGeneration) return;
       state.inFlight = false;
@@ -659,12 +660,12 @@
       var changed = (result.torrents || []).some(function (torrent) { return before.get(torrent.id) !== torrent.status; });
       if (!changed && WATCH[name]) state.pendingWatch = { ids: ids, before: before, until: Date.now() + 6000 };
       else state.pendingAction = null;
-      state.actionError = "";
+      showStatus("");
       paintLive();
     }, function (error) {
       state.pendingAction = null;
       if (error.info && error.info.locked) return lock();
-      state.actionError = error.message;
+      showStatus(error.message);
       paintLive();
     });
   }
@@ -714,6 +715,7 @@
     return '<div class="row' + (selected ? " selected" : "") + '" data-id="' + torrent.id + '" role="row" aria-selected="' + selected + '">' + check + '<div class="card-body"><div class="name-line"><div class="name clip" data-full="' + esc(torrent.name) + '">' + esc(torrent.name) + '</div>' + statusChip(torrent) + '</div>' + errorLine + meta + '</div><div class="num">' + esc(Twui.formatBytes(torrent.total_size, state.units)) + '</div><div class="num">' + esc(Twui.formatBytes(torrent.downloaded_ever, state.units)) + '</div><div class="num">' + esc(Twui.formatSpeed(torrent.rate_download, state.units)) + '</div><div class="num">' + esc(Twui.formatSpeed(torrent.rate_upload, state.units)) + '</div><div class="num">' + esc(Twui.formatDuration(torrent.eta)) + '</div><div class="num">' + esc(Twui.formatRatio(torrent.upload_ratio)) + '</div><div class="progress-cell"><span class="' + barClass(torrent) + '" data-live-progress><span style="width:' + progressWidth(fraction) + '"></span></span><span class="pct" data-live-percent>' + esc(progressText(fraction)) + '</span></div></div>';
   }
   function listHtml() {
+    if (state.reconnecting) return '<div class="status-center"><p>Reconnecting…</p></div>';
     if (!state.loaded) {
       var bones = "";
       for (var i = 0; i < 8; i++) bones += '<div class="row skeleton-row"><div><div class="skeleton name"></div><div class="skeleton sub"></div></div><div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div></div>';
@@ -722,7 +724,7 @@
     var rows = visibleTorrents();
     if (!rows.length) {
       var libraryEmpty = !state.torrents.length && state.filter === "all" && !state.query.trim();
-      if (libraryEmpty) return '<div class="note"><p>No torrents yet</p></div>';
+      if (libraryEmpty) return '<div class="status-center"><p>No torrents yet</p></div>';
       return '<div class="note"><p>Nothing in this filter</p><button type="button" class="primary" data-act="filter" data-filter="all">Show all</button></div>';
     }
     var head = '<div class="head-row" role="row"><div class="head-main"><button type="button" class="left" data-act="sort" data-sort="name">Name</button><button type="button" class="left" data-act="sort" data-sort="percent_done">Progress</button></div><button type="button" class="num" data-act="sort" data-sort="total_size">Size</button><button type="button" class="num" data-act="sort" data-sort="downloaded_ever">Downloaded</button><button type="button" class="num" data-act="sort" data-sort="rate_download">Down</button><button type="button" class="num" data-act="sort" data-sort="rate_upload">Up</button><button type="button" class="num" data-act="sort" data-sort="eta">ETA</button><button type="button" class="num" data-act="sort" data-sort="upload_ratio">Ratio</button></div>';
@@ -842,7 +844,7 @@
     var current = stats.current_stats || {};
     var cumulative = stats.cumulative_stats || {};
     function block(title, item) {
-      return "<h2>" + title + "</h2><div class='stats'>" + stat("Downloaded", Twui.formatBytes(item.downloaded_bytes, state.units)) + stat("Uploaded", Twui.formatBytes(item.uploaded_bytes, state.units)) + stat("Files added", Twui.formatCount(item.files_added)) + stat("Active time", Twui.formatDuration(item.seconds_active)) + stat("Sessions", Twui.formatCount(item.session_count)) + "</div>";
+      return "<h2>" + title + "</h2><div class='stats'>" + stat("Downloaded", Twui.formatBytes(item.downloaded_bytes, state.units)) + stat("Uploaded", Twui.formatBytes(item.uploaded_bytes, state.units)) + stat("Files added", Twui.formatCount(item.files_added)) + stat("Active time", Twui.formatActiveTime(item.seconds_active)) + stat("Sessions", Twui.formatCount(item.session_count)) + "</div>";
     }
     return "<h2>Session</h2><div class='stats'>" + stat("Download", Twui.formatSpeed(stats.download_speed, state.units)) + stat("Upload", Twui.formatSpeed(stats.upload_speed, state.units)) + stat("Active", Twui.formatCount(stats.active_torrent_count)) + stat("Stopped", Twui.formatCount(stats.paused_torrent_count)) + stat("Torrents", Twui.formatCount(stats.torrent_count)) + "</div>" + block("This session", current) + block("Cumulative", cumulative);
   }
@@ -935,7 +937,7 @@
     }).join("");
     return '<p class="note">This colour marks this Transmission instance. Lightness is adjusted so text stays readable. The title is the name in the window. Both are remembered in this browser and applied the next time this address is opened.</p><label class="field">Base colour<input id="colour-field" type="color" value="' + esc(state.colour) + '"' + pendingColour + '></label><div class="swatches">' + PRESETS.map(function (hex) {
       return '<button type="button" class="swatch' + (state.colour.toLowerCase() === hex.toLowerCase() ? " current" : "") + '" data-act="preset" data-colour="' + hex + '" style="background:' + hex + '" aria-label="' + hex + '"' + pendingColour + "></button>";
-    }).join("") + '</div><p class="note">' + esc(state.prefError) + '</p><label class="field">Page title<input id="title-field" type="text" value="' + esc(state.title) + '"' + pendingTitle + "></label><div class='field'><span>Appearance on this device</span>" + modes + "</div><p class='version'>Interface " + esc(Twui.VERSION) + (state.daemonVersion ? " · Transmission " + esc(state.daemonVersion) : "") + "</p>";
+    }).join("") + '</div><p class="note" data-status="prefError">' + esc(state.prefError) + '</p><label class="field">Page title<input id="title-field" type="text" value="' + esc(state.title) + '"' + pendingTitle + "></label><div class='field'><span>Appearance on this device</span>" + modes + "</div><p class='version'>Interface " + esc(Twui.VERSION) + (state.daemonVersion ? " · Transmission " + esc(state.daemonVersion) : "") + "</p>";
   }
   function settingsHtml() {
     var sections = [{ id: "appearance", title: "Appearance" }].concat(SETTING_SECTIONS);
@@ -951,8 +953,8 @@
       var section = SETTING_SECTIONS.filter(function (item) { return item.id === state.settingsSection; })[0];
       body = section.fields.map(fieldControl).join("");
       if (section.id === "downloads") body += '<p class="note" id="free-space">' + esc(state.freeSpace) + "</p>";
-      if (section.id === "connections") body += '<div class="toolbar-actions"><button type="button" class="ghost" data-act="port" data-protocol="ipv4">Test IPv4</button><button type="button" class="ghost" data-act="port" data-protocol="ipv6">Test IPv6</button></div><p class="note">' + esc(state.portResult) + "</p>";
-      if (section.id === "blocklist") body += '<p class="note">' + Twui.formatCount(state.session.blocklist_size || 0) + ' rules. ' + esc(state.blocklistNote) + '</p><button type="button" class="primary" data-act="blocklist">Update blocklist</button>';
+      if (section.id === "connections") body += '<div class="toolbar-actions"><button type="button" class="ghost" data-act="port" data-protocol="ipv4">Test IPv4</button><button type="button" class="ghost" data-act="port" data-protocol="ipv6">Test IPv6</button></div><p class="note" data-status="portResult">' + esc(state.portResult) + "</p>";
+      if (section.id === "blocklist") body += '<p class="note">' + Twui.formatCount(state.session.blocklist_size || 0) + ' rules. <span data-status="blocklistNote">' + esc(state.blocklistNote) + '</span></p><button type="button" class="primary" data-act="blocklist">Update blocklist</button>';
     }
     return nav + body;
   }
@@ -1085,10 +1087,60 @@
       node.textContent = Twui.formatSpeed(value, state.units);
     });
   }
+  var noticeTimer = null;
+  var noteTimers = {};
+  function showStatus(text) {
+    state.actionError = text || "";
+    if (noticeTimer) clearTimeout(noticeTimer);
+    noticeTimer = null;
+    if (state.actionError) {
+      noticeTimer = setTimeout(function () {
+        noticeTimer = null;
+        state.actionError = "";
+        paintBanner();
+      }, 3000);
+    }
+    paintBanner();
+  }
+  function showNote(key, text, hold) {
+    state[key] = text || "";
+    if (noteTimers[key]) clearTimeout(noteTimers[key]);
+    delete noteTimers[key];
+    if (!state[key] || hold) return;
+    noteTimers[key] = setTimeout(function () {
+      delete noteTimers[key];
+      if (state[key] !== text) return;
+      state[key] = "";
+      var node = document.querySelector('[data-status="' + key + '"]');
+      if (node) node.textContent = "";
+    }, 3000);
+  }
+  function returnToLibrary() {
+    closeDialog();
+    closeMenu();
+    hideTip();
+    state.torrents = [];
+    state.labels = new Map();
+    state.selected = new Set();
+    state.detail = null;
+    state.detailOpen = false;
+    state.anchor = null;
+    state.selectMode = false;
+    state.menuIds = null;
+    state.pendingAction = null;
+    state.pendingWatch = null;
+    state.loaded = true;
+    state.view = "torrents";
+    if (detailPushed) {
+      detailPushed = false;
+      ignorePop = true;
+      history.back();
+    }
+  }
   function paintBanner() {
     var banner = document.getElementById("banner");
     if (!banner) return;
-    var text = state.reconnecting ? "Reconnecting…" : (state.actionError || "");
+    var text = state.actionError || "";
     banner.hidden = !text;
     banner.textContent = text;
   }
@@ -1130,7 +1182,7 @@
       if (state.view === "settings") paintLive();
     }, function (error) {
       if (error.info && error.info.locked) return lock();
-      state.actionError = error.message;
+      showStatus(error.message);
       paintBanner();
     });
   }
@@ -1145,10 +1197,10 @@
     }).then(function (result) {
       keys.forEach(function (key) { state.session[key] = result[key]; });
       if (patch.download_dir) refreshFreeSpace();
-      state.actionError = "";
+      showStatus("");
     }, function (error) {
       if (error.info && error.info.locked) return lock();
-      state.actionError = error.message;
+      showStatus(error.message);
     }).then(function () {
       keys.forEach(function (key) { delete state.pendingKeys[key]; });
       state.rebuildSettings = true;
@@ -1165,10 +1217,10 @@
       return fetchDetail(id);
     }).then(function (result) {
       if (result.torrents && result.torrents[0]) state.detail = result.torrents[0];
-      state.actionError = "";
+      showStatus("");
     }, function (error) {
       if (error.info && error.info.locked) return lock();
-      state.actionError = error.message;
+      showStatus(error.message);
     }).then(function () {
       delete state.pendingKeys[key];
       if (state.mode === "live") paintLive();
@@ -1178,7 +1230,7 @@
     if (state.pendingKeys.colour) return;
     var pick = Twui.hexToOklch(hex);
     if (!pick || pick.C < 0.02) {
-      state.prefError = "Choose a colour with a visible hue.";
+      showNote("prefError", "Choose a colour with a visible hue.");
       state.rebuildSettings = true;
       paintLive();
       return;
@@ -1187,15 +1239,15 @@
     state.rebuildSettings = true;
     paintLive();
     if (!Twui.applyTheme(hex, state.appearance)) {
-      state.prefError = "Choose a colour with a visible hue.";
+      showNote("prefError", "Choose a colour with a visible hue.");
     } else {
       try {
         Twui.saveColour(hex);
         state.colour = hex;
-        state.prefError = "";
+        showNote("prefError", "");
         refreshIcons();
       } catch (error) {
-        state.prefError = "The colour could not be stored.";
+        showNote("prefError", "The colour could not be stored.");
       }
     }
     delete state.pendingKeys.colour;
@@ -1210,10 +1262,10 @@
     try {
       state.title = Twui.saveTitle(value);
       document.title = state.title;
-      state.prefError = "";
+      showNote("prefError", "");
       refreshIcons();
     } catch (error) {
-      state.prefError = "The title could not be stored.";
+      showNote("prefError", "The title could not be stored.");
     }
     delete state.pendingKeys.title;
     state.rebuildSettings = true;
@@ -1318,7 +1370,7 @@
       Twui.rpc("torrent_add", params).then(function (result) {
         var added = result.torrent_added || result.torrent_duplicate;
         closeDialog();
-        if (result.torrent_duplicate) state.actionError = "This torrent is already present.";
+        if (result.torrent_duplicate) showStatus("This torrent is already present.");
         if (added && added.id != null) {
           state.selected = new Set([added.id]);
           state.tab = "overview";
@@ -1358,12 +1410,12 @@
       state.selected = new Set();
       state.detail = null;
       state.detailOpen = false;
-      state.actionError = "";
+      showStatus("");
       tick();
     }, function (error) {
       state.pendingAction = null;
       if (error.info && error.info.locked) return lock();
-      state.actionError = error.message;
+      showStatus(error.message);
       paintLive();
     });
   }
@@ -1677,7 +1729,7 @@
         paintLive();
       }, function (error) {
         if (error.info && error.info.locked) return lock();
-        state.actionError = error.message;
+        showStatus(error.message);
         paintBanner();
       });
       return;
@@ -1703,7 +1755,7 @@
         tick();
       }, function (error) {
         if (error.info && error.info.locked) return lock();
-        state.actionError = error.message;
+        showStatus(error.message);
         paintBanner();
       });
       return;
@@ -1722,32 +1774,32 @@
       return;
     }
     if (name === "port") {
-      state.portResult = "Testing…";
+      showNote("portResult", "Testing…", true);
       state.rebuildSettings = true;
       paintLive();
       Twui.rpc("port_test", { ip_protocol: act.dataset.protocol }).then(function (result) {
-        state.portResult = (act.dataset.protocol === "ipv6" ? "IPv6" : "IPv4") + " port is " + (result.port_is_open ? "open" : "closed") + ".";
+        showNote("portResult", (act.dataset.protocol === "ipv6" ? "IPv6" : "IPv4") + " port is " + (result.port_is_open ? "open" : "closed") + ".");
         state.rebuildSettings = true;
         paintLive();
       }, function (error) {
-        state.portResult = error.message;
+        showNote("portResult", error.message);
         state.rebuildSettings = true;
         paintLive();
       });
       return;
     }
     if (name === "blocklist") {
-      state.blocklistNote = "Updating…";
+      showNote("blocklistNote", "Updating…", true);
       state.rebuildSettings = true;
       paintLive();
       Twui.rpc("blocklist_update", {}).then(function (result) {
-        state.blocklistNote = "Updated to " + Twui.formatCount(result.blocklist_size) + " rules.";
+        showNote("blocklistNote", "Updated to " + Twui.formatCount(result.blocklist_size) + " rules.");
         if (state.session) state.session.blocklist_size = result.blocklist_size;
         state.rebuildSettings = true;
         paintLive();
       }, function (error) {
         if (error.info && error.info.locked) return lock();
-        state.blocklistNote = error.message;
+        showNote("blocklistNote", error.message);
         state.rebuildSettings = true;
         paintLive();
       });
@@ -1819,7 +1871,7 @@
         paintLive();
       }, function (error) {
         if (error.info && error.info.locked) return lock();
-        state.actionError = error.message;
+        showStatus(error.message);
         paintLive();
       });
       return;
@@ -1988,6 +2040,6 @@
     closeMobileDetail(true);
   });
 
-  if ("serviceWorker" in navigator) navigator.serviceWorker.register(location.origin + "/transmission/web/sw.js?v1.0.9").catch(function () {});
+  if ("serviceWorker" in navigator) navigator.serviceWorker.register(location.origin + "/transmission/web/sw.js?v1.0.10").catch(function () {});
   probe();
 })();
