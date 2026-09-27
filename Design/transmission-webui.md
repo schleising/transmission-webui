@@ -11,7 +11,7 @@ Target daemon: Transmission 4.1 or newer. The current release this design is wri
 - Sign-in uses Transmission’s RPC username and password. The interface stores no password of its own.
 - Every call is an HTTP POST to `/transmission/rpc`.
 - A `409` response yields a new `X-Transmission-Session-Id`. The client stores that value and sends the same request again with the header set.
-- While the library is open, the client polls `torrent_get` every 2 seconds for `id`, `name`, `status`, `percent_done`, `rate_download`, `rate_upload`, `eta`, `total_size`, `downloaded_ever`, `upload_ratio`, and `error_string`.
+- While the library is open, the client polls `torrent_get` every 2 seconds for `id`, `name`, `status`, `percent_done`, `recheck_progress`, `rate_download`, `rate_upload`, `eta`, `total_size`, `downloaded_ever`, `upload_ratio`, and `error_string`.
 - The same screen manages the session: add, start, stop, verify, reannounce, files, peers, trackers, labels, speed limits, and the rest of the session settings Transmission exposes.
 - The chrome is hues of one colour, including the favicon. A torrent’s progress bar and status chip use that hue, stepped by status. The piece map uses grey, red, and green, as set out below. Colour and page title are stored in this browser for this origin. They are not copied to another device. Light, dark, or system stays on the device.
 - Torrent status, speeds, and session facts are whatever Transmission last reported. A setting changes on screen only after the daemon accepts it and a follow-up read returns the new value.
@@ -86,7 +86,7 @@ The client calls the absolute path `/transmission/rpc`. From a page at `/transmi
 
 ### Interface version
 
-The interface version is `1.0.8`. Settings shows it as “Interface 1.0.8”, and adds the daemon version when `session_get` has returned one. The same string is the cache-busting query on every static file: `app.css?v1.0.8`, `app.js?v1.0.8`, `manifest.webmanifest?v1.0.8`, icon URLs, and `sw.js?v1.0.8`. The HTML links use that query. Raising the version changes every URL, and the service worker drops the previous cache when it activates. The latest published release tag is `v1.0.1`. A cookieless probe that is redirected to a sign-in page is retried with the browser cookies.
+The interface version is `1.0.9`. Settings shows it as “Interface 1.0.9”, and adds the daemon version when `session_get` has returned one. The same string is the cache-busting query on every static file: `app.css?v1.0.9`, `app.js?v1.0.9`, `manifest.webmanifest?v1.0.9`, icon URLs, and `sw.js?v1.0.9`. The HTML links use that query. Raising the version changes every URL, and the service worker drops the previous cache when it activates. The latest published release tag is `v1.0.1`. A cookieless probe that is redirected to a sign-in page is retried with the browser cookies.
 
 `Deployment/webui` also contains an empty `default.json`. Leave that file in the web home. It is there so Transmission does not report a missing `default.json` when it starts.
 
@@ -298,9 +298,9 @@ On the Torrents view, a tick does these calls, in order:
 
 1. `torrent_get` with no `ids` (every torrent) and exactly these fields, in this order:
 
-   `id`, `name`, `status`, `percent_done`, `rate_download`, `rate_upload`, `eta`, `total_size`, `upload_ratio`, `error_string`
+   `id`, `name`, `status`, `percent_done`, `recheck_progress`, `rate_download`, `rate_upload`, `eta`, `total_size`, `downloaded_ever`, `upload_ratio`, `error_string`
 
-2. `session_stats`, for the speeds and totals in the sidebar and on the activity page. `session_stats` is not added to the ten library fields.
+2. `session_stats`, for the speeds and totals in the sidebar and on the activity page. `session_stats` is not added to the library fields.
 
 3. When the view is still Torrents, a `torrent_get` of `id` and `labels` only.
 
@@ -316,7 +316,7 @@ sequenceDiagram
   participant RPC as /transmission/rpc
 
   loop Every 2 seconds on Torrents, while unlocked and visible
-    UI->>RPC: torrent_get with the ten library fields
+    UI->>RPC: torrent_get with the library fields
     RPC-->>UI: result.torrents
     UI->>RPC: session_stats
     RPC-->>UI: speeds and totals
@@ -337,6 +337,7 @@ Example library request:
       "name",
       "status",
       "percent_done",
+      "recheck_progress",
       "rate_download",
       "rate_upload",
       "eta",
@@ -383,14 +384,14 @@ The page keeps the raw numbers from RPC. Everything drawn on screen is formatted
 |---|---|
 | Sizes, speeds, memory | `units` from the unlock `session_get`: `speed_bytes`, `size_bytes`, `memory_bytes`, and `speed_units`, `size_units`, `memory_units`. A rate of 0 is a formatted zero, such as `0 kB/s`. |
 | Before `units` has arrived | Divide by 1000 and use B, kB, MB, GB, TB. |
-| `percent_done` beside a progress bar | Two decimal places, floored, so a fraction just under 1 cannot read as 100%. `100.00%` and a full bar only when the fraction is at least 1. |
-| `recheck_progress`, peer progress | A whole-number percentage from the 0–1 fraction. |
+| `percent_done` beside a progress bar | Two decimal places, floored, so a fraction just under 1 cannot read as 100%. `100.00%` and a full bar only when the fraction is at least 1. While `status` is 2, the bar uses `recheck_progress` with this same rule. |
+| `recheck_progress` on the inspector’s “Verifying” line, peer progress | A whole-number percentage from the 0–1 fraction. |
 | `upload_ratio` | Two decimal places. |
 | `eta` and other durations | Hours and minutes, or seconds when the duration is under a minute. Any `eta` below 0 is ∞. |
 | Unix timestamps | The local date and time. |
 | Counts | Grouped digits. |
 
-While the Torrents view is open, the labels call above runs on the same 2 second tick. It is not part of the ten library fields, and it does not run on Activity or Settings.
+While the Torrents view is open, the labels call above runs on the same 2 second tick. It is not part of the library fields, and it does not run on Activity or Settings.
 
 While exactly one torrent is open in the inspector, the detail call on the same tick asks for that id and the detail fields in section 9. A multi-selection does not fetch peers or files. The overview is not rebuilt from scratch on every tick: when the torrent, the tab, and the shape of that view are unchanged, the speeds, progress, and piece map are updated in place. The piece canvas is left as it is when `pieces` and `availability` are unchanged. A new torrent often has no piece count on the first read. When the piece count, name, or hash arrives, the overview is built again and the piece map is drawn.
 
@@ -465,7 +466,7 @@ Remove asks first. The calm choice removes the torrents and leaves the files: `t
 
 Keyboard, when focus is not in a field: `/` focuses the filter, `a` opens Add, and Delete or Backspace starts the remove confirmation for the current selection.
 
-Verifying rows say “Verifying” or “Queued to verify”. The library poll does not include `recheck_progress`, so the bar keeps showing `percent_done`. The open inspector requests `recheck_progress` and shows that fraction there.
+Verifying rows say “Verifying” or “Queued to verify”. While `status` is 2, the progress bar and the percentage beside it use `recheck_progress` on the library row and in the inspector. When verification finishes and `status` is no longer 2, both return to `percent_done`. Queued to verify keeps `percent_done`. The inspector also shows a whole-number “Verifying” line from `recheck_progress`.
 
 ## 9. Inspector, add, and files
 
@@ -491,7 +492,7 @@ Overview shows the speeds, estimate, ratio, and these sizes:
 | Downloaded | `downloaded_ever` |
 | Uploaded | `uploaded_ever` |
 
-The progress bar uses `percent_done` only. The same overview also shows location, hash, privacy, peer count, and queue position. Labels are edited in the controls below the stats.
+While `status` is Verifying (2), the progress bar and the percentage beside it use `recheck_progress`. Otherwise they use `percent_done`. The same overview also shows location, hash, privacy, peer count, and queue position. Labels are edited in the controls below the stats.
 
 The piece map is a canvas, one cell for every piece, including piece counts well above 2000. The canvas is filled white, and a 1px gap is left white between cells. The key under the map is:
 
@@ -713,13 +714,13 @@ The interface is ready when all of the following hold.
 1. With RPC authentication enabled, a wrong password stays on the lock screen and a right password opens the library. With authentication disabled, the library stays hidden and the page says to turn authentication on.
 2. The password is absent from `localStorage`, `sessionStorage`, and the URL after unlock, after lock, and after a reload.
 3. The first RPC call of a fresh page receives `409`, stores `X-Transmission-Session-Id`, and retries once with that header. A second `409` on the same call does not retry again. Through nginx, that header is forwarded on the request and returned on the `409`.
-4. A captured library request is JSON-RPC 2.0: `jsonrpc`, `method` `torrent_get`, `params.fields` exactly `id`, `name`, `status`, `percent_done`, `rate_download`, `rate_upload`, `eta`, `total_size`, `downloaded_ever`, `upload_ratio`, `error_string`, and an `id`. The next one starts about 2 seconds later while the tab is visible. A daemon whose `rpc_version_semver` is below `6.0.0` never shows the library.
+4. A captured library request is JSON-RPC 2.0: `jsonrpc`, `method` `torrent_get`, `params.fields` exactly `id`, `name`, `status`, `percent_done`, `recheck_progress`, `rate_download`, `rate_upload`, `eta`, `total_size`, `downloaded_ever`, `upload_ratio`, `error_string`, and an `id`. The next one starts about 2 seconds later while the tab is visible. A daemon whose `rpc_version_semver` is below `6.0.0` never shows the library.
 5. Hiding the tab stops the poll. Showing it polls immediately.
 6. A `401` during a poll returns to the lock screen and drops the torrent list from the page.
 7. Add by file and add by magnet both call `torrent_add`. Remove, remove-and-delete, start, stop, and verify call the methods in the tables above. Stop is the pause action. Selecting several torrents sends one call with those `ids`.
 8. Changing the base colour or the page title repaints this page, including the favicon and `document.title`, once the change is stored. Another window of this browser shows that colour and title after it is opened or refreshed. Another browser, and another device, keep their own. `theme-color` matches the accent. The sidebar shows `location.host`. Light and dark stay on the browser that set them.
 9. At 390px width the library, a torrent, add, and settings are each usable without a horizontal page scroll and without the document scrolling. At 1440px the list and the inspector are on screen together. Those layouts are flex and grid. Lists scroll inside the app. The toolbar is Filter by name and Add on one row. The inspector closes with an X and has no Back control. There is no Shut down control.
-10. Status text is present for downloading, seeding, stopped, verifying, and errors, on a chip under the name and on the row above the progress bar in the inspector. The progress bar uses the same status colour. A finished torrent is not given a green row. The piece map uses the colours in section 9, and its key does not list Downloading. Every status string is a label for the latest `status` from `torrent_get`, and an error chip follows a non-empty `error_string`. An unknown `eta` is ∞. The percentage beside a progress bar shows two decimal places and is not 100% until `percent_done` is at least 1. Speeds, sizes, ratios, and dates are human-readable. Finished uses that same complete test.
+10. Status text is present for downloading, seeding, stopped, verifying, and errors, on a chip under the name and on the row above the progress bar in the inspector. The progress bar uses the same status colour. A finished torrent is not given a green row. The piece map uses the colours in section 9, and its key does not list Downloading. Every status string is a label for the latest `status` from `torrent_get`, and an error chip follows a non-empty `error_string`. An unknown `eta` is ∞. The percentage beside a progress bar shows two decimal places. While `status` is 2 that percentage is `recheck_progress`; otherwise it is `percent_done`, and it is not 100% until that fraction is at least 1. Speeds, sizes, ratios, and dates are human-readable. Finished uses `percent_done` of at least 1.
 11. After `session_set` or `torrent_set` fails, the control still shows the previous server value and is enabled again. After it succeeds, the control shows the value from the follow-up `session_get` or `torrent_get`, including when that differs from the value that was sent. While the write is in flight, that control ignores further input.
 12. Choosing Start leaves the status label unchanged until a later `torrent_get` reports a new `status`. The Start control stays disabled until then.
 13. The browser offers to install the page served from `/transmission/web/`. Two hostnames install as two apps, named from each instance’s title. The service worker’s scope is `/transmission/web/`, so it does not answer `/transmission/rpc`. Static asset URLs end in `?v` plus the interface version, and Settings shows that same version.

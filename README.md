@@ -2,7 +2,7 @@
 
 A browser interface for a [Transmission](https://transmissionbt.com/) daemon. It is a static page: it has no server of its own, and the only password is the one that daemon already requires. Transmission 4.1 or newer serves the page from `TRANSMISSION_WEB_HOME` and answers JSON-RPC 2.0 at `/transmission/rpc`.
 
-The interface version is 1.0.8. Settings shows that version, and the daemon version once the session has been read. Copy on screen uses British spelling. RPC names stay as Transmission spells them.
+The interface version is 1.0.9. Settings shows that version, and the daemon version once the session has been read. Copy on screen uses British spelling. RPC names stay as Transmission spells them.
 
 The behaviour of the page is written up in [Design/transmission-webui.md](Design/transmission-webui.md). The pictures in that folder are earlier mockups.
 
@@ -92,7 +92,7 @@ Use your own `server_name` and upstream port. `client_max_body_size 16m` leaves 
 
 The sidebar, or the bottom bar on a phone, has Torrents, Activity, and Settings. Session speeds sit under the title. The hostname under the title is the address you opened.
 
-**Torrents.** Filter by name in the toolbar. That field does not offer previous entries. The sidebar and the chips list All, Downloading, Active, Seeding, Stopped, Finished, Checking, and Error. Choosing the selected filter again, other than All, returns to All. Finished means the torrent’s `percent_done` is at least 1. Column headers sort the list. The percentage beside a bar shows two decimal places and does not read 100% until the torrent is complete. The status chip is on its own row under the name, and the progress bar uses that status colour. On the desktop row, Downloaded sits to the right of Size. In Details the chip is on the row above the progress bar. A finished row is not tinted green.
+**Torrents.** Filter by name in the toolbar. That field does not offer previous entries. The sidebar and the chips list All, Downloading, Active, Seeding, Stopped, Finished, Checking, and Error. Choosing the selected filter again, other than All, returns to All. Finished means the torrent’s `percent_done` is at least 1. Column headers sort the list. The percentage beside a bar shows two decimal places and does not read 100% until the torrent is complete. The status chip is on its own row under the name, and the progress bar uses that status colour. While a torrent is verifying, the bar and percentage show `recheck_progress`, then return to download progress. On the desktop row, Downloaded sits to the right of Size. In Details the chip is on the row above the progress bar. A finished row is not tinted green.
 
 Click a torrent to open it. On a wide window the inspector is a column beside the list. On a narrower window it replaces the list. The X closes it and clears the selection. Overview, Files, Peers, and Trackers are the four tabs. Overview includes the piece map: grey is not downloaded, red is not available, and green is downloaded.
 

@@ -1,5 +1,5 @@
 (function () {
-  var LIBRARY_FIELDS = ["id", "name", "status", "percent_done", "rate_download", "rate_upload", "eta", "total_size", "downloaded_ever", "upload_ratio", "error_string"];
+  var LIBRARY_FIELDS = ["id", "name", "status", "percent_done", "recheck_progress", "rate_download", "rate_upload", "eta", "total_size", "downloaded_ever", "upload_ratio", "error_string"];
   var UNLOCK_FIELDS = ["rpc_version_semver", "version", "units", "download_dir", "start_added_torrents"];
   var DETAIL_FIELDS = ["id", "name", "status", "error", "error_string", "percent_done", "percent_complete", "recheck_progress", "rate_download", "rate_upload", "eta", "upload_ratio", "total_size", "size_when_done", "have_valid", "have_unchecked", "downloaded_ever", "uploaded_ever", "left_until_done", "download_dir", "hash_string", "is_private", "comment", "labels", "queue_position", "peers_connected", "magnet_link", "bandwidth_priority", "honors_session_limits", "download_limit", "download_limited", "upload_limit", "upload_limited", "seed_ratio_mode", "seed_ratio_limit", "seed_idle_mode", "seed_idle_limit", "peer_limit", "group", "sequential_download", "sequential_download_from_piece", "files", "file_stats", "wanted", "priorities", "peers", "peers_from", "trackers", "tracker_stats", "tracker_list", "pieces", "availability", "piece_count", "piece_size"];
   var SESSION_FIELDS = ["speed_limit_down", "speed_limit_down_enabled", "speed_limit_up", "speed_limit_up_enabled", "alt_speed_down", "alt_speed_up", "alt_speed_enabled", "alt_speed_time_enabled", "alt_speed_time_begin", "alt_speed_time_end", "alt_speed_time_day", "download_dir", "incomplete_dir", "incomplete_dir_enabled", "start_added_torrents", "rename_partial_files", "trash_original_torrent_files", "script_torrent_done_filename", "script_torrent_done_enabled", "script_torrent_added_filename", "script_torrent_added_enabled", "script_torrent_done_seeding_filename", "script_torrent_done_seeding_enabled", "seed_ratio_limited", "seed_ratio_limit", "idle_seeding_limit_enabled", "idle_seeding_limit", "peer_port", "peer_port_random_on_start", "port_forwarding_enabled", "encryption", "peer_limit_global", "peer_limit_per_torrent", "dht_enabled", "pex_enabled", "lpd_enabled", "preferred_transports", "download_queue_enabled", "download_queue_size", "seed_queue_enabled", "seed_queue_size", "queue_stalled_enabled", "queue_stalled_minutes", "blocklist_enabled", "blocklist_url", "blocklist_size", "version", "rpc_version_semver", "units"];
@@ -193,7 +193,8 @@
     return { bin: bin, count: count, have: have };
   }
   function shownFraction(torrent) {
-    var reported = Number(torrent && torrent.percent_done);
+    var verifying = Number(torrent && torrent.status) === 2;
+    var reported = Number(verifying ? torrent.recheck_progress : torrent && torrent.percent_done);
     if (!Number.isFinite(reported) || reported < 0) reported = 0;
     if (reported > 1) reported = 1;
     return reported;
@@ -1987,6 +1988,6 @@
     closeMobileDetail(true);
   });
 
-  if ("serviceWorker" in navigator) navigator.serviceWorker.register(location.origin + "/transmission/web/sw.js?v1.0.8").catch(function () {});
+  if ("serviceWorker" in navigator) navigator.serviceWorker.register(location.origin + "/transmission/web/sw.js?v1.0.9").catch(function () {});
   probe();
 })();
