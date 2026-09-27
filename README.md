@@ -18,12 +18,12 @@ A browser interface for a [Transmission](https://transmissionbt.com/) daemon. Tr
 
 Use Transmission 4.1 or newer, with its remote password turned on. If the daemon accepts a connection with no password, the page asks you to turn that on and does not open the library.
 
-The latest published release is [v1.0.1](https://github.com/schleising/transmission-webui/releases/tag/v1.0.1).
+The latest published release is [v1.0.16](https://github.com/schleising/transmission-webui/releases/tag/v1.0.16).
 
 ```bash
 git clone https://github.com/schleising/transmission-webui.git
 cd transmission-webui
-git checkout v1.0.1
+git checkout v1.0.16
 ```
 
 Copy everything in `Deployment/webui` into the directory Transmission uses for its web interface. Keep the empty `default.json` in that copy, and leave it empty, so Transmission does not complain about a missing file when it starts.

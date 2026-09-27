@@ -86,7 +86,7 @@ The client calls the absolute path `/transmission/rpc`. From a page at `/transmi
 
 ### Interface version
 
-The interface version is `1.0.16`. Settings shows it as “Interface 1.0.16”, and adds the daemon version when `session_get` has returned one. The same string is the cache-busting query on every static file: `app.css?v1.0.16`, `app.js?v1.0.16`, `manifest.webmanifest?v1.0.16`, icon URLs, and `sw.js?v1.0.16`. The HTML links use that query. Raising the version changes every URL, and the service worker drops the previous cache when it activates. The latest published release tag is `v1.0.1`. A cookieless probe that is redirected to a sign-in page is retried with the browser cookies.
+The interface version is `1.0.16`. Settings shows it as “Interface 1.0.16”, and adds the daemon version when `session_get` has returned one. The same string is the cache-busting query on every static file: `app.css?v1.0.16`, `app.js?v1.0.16`, `manifest.webmanifest?v1.0.16`, icon URLs, and `sw.js?v1.0.16`. The HTML links use that query. Raising the version changes every URL, and the service worker drops the previous cache when it activates. The latest published release tag is `v1.0.16`. A cookieless probe that is redirected to a sign-in page is retried with the browser cookies.
 
 `Deployment/webui` also contains an empty `default.json`. Leave that file in the web home. It is there so Transmission does not report a missing `default.json` when it starts.
 
