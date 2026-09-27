@@ -611,6 +611,13 @@
     state.inFlight = false;
   }
 
+  function leaveSelectMode() {
+    if (!state.selectMode) return;
+    state.selectMode = false;
+    state.selected = new Set();
+    state.detail = null;
+    state.detailOpen = false;
+  }
   function runAction(name, ids) {
     if (!ids.length || state.pendingAction === name) return;
     var before = new Map(ids.map(function (id) {
@@ -618,7 +625,8 @@
       return [id, torrent ? torrent.status : null];
     }));
     state.pendingAction = name;
-    paintActionState();
+    leaveSelectMode();
+    paintLive();
     Twui.rpc(ACTIONS[name], { ids: ids }).then(function () {
       return Twui.rpc("torrent_get", { ids: ids, fields: LIBRARY_FIELDS });
     }).then(function (result) {
@@ -1314,7 +1322,8 @@
   function doRemove(ids, deleteFiles) {
     closeDialog();
     state.pendingAction = "remove";
-    paintActionState();
+    leaveSelectMode();
+    paintLive();
     Twui.rpc("torrent_remove", { ids: ids, delete_local_data: deleteFiles }).then(function () {
       state.pendingAction = null;
       state.selected = new Set();
@@ -1950,6 +1959,6 @@
     closeMobileDetail(true);
   });
 
-  if ("serviceWorker" in navigator) navigator.serviceWorker.register(location.origin + "/transmission/web/sw.js?v1.0.4").catch(function () {});
+  if ("serviceWorker" in navigator) navigator.serviceWorker.register(location.origin + "/transmission/web/sw.js?v1.0.5").catch(function () {});
   probe();
 })();
