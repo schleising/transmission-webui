@@ -12,7 +12,7 @@ Target daemon: Transmission 4.1 or newer. The current release this design is wri
 - Every call is an HTTP POST to `/transmission/rpc`.
 - A `409` response yields a new `X-Transmission-Session-Id`. The client stores that value and sends the same request again with the header set.
 - While the library is open, the client polls `torrent_get` every 2 seconds for `id`, `name`, `status`, `percent_done`, `rate_download`, `rate_upload`, `eta`, `total_size`, `upload_ratio`, and `error_string`.
-- The same screen manages the session: add, start, stop, verify, reannounce, queue, files, peers, trackers, labels, speed limits, and the rest of the session settings Transmission exposes.
+- The same screen manages the session: add, start, stop, verify, reannounce, files, peers, trackers, labels, speed limits, and the rest of the session settings Transmission exposes.
 - The chrome is hues of one colour, including the favicon. A complete torrent’s progress is green, and the piece map uses grey, red, and green, as set out below. Colour and page title are stored in this browser for this origin. They are not copied to another device. Light, dark, or system stays on the device.
 - Torrent status, speeds, and session facts are whatever Transmission last reported. A setting changes on screen only after the daemon accepts it and a follow-up read returns the new value.
 - The shell is laid out with CSS flex and grid.
@@ -86,7 +86,7 @@ The client calls the absolute path `/transmission/rpc`. From a page at `/transmi
 
 ### Interface version
 
-The interface version is `1.0.1`. Settings shows it as “Interface 1.0.1”, and adds the daemon version when `session_get` has returned one. The same string is the cache-busting query on every static file: `app.css?v1.0.1`, `app.js?v1.0.1`, `manifest.webmanifest?v1.0.1`, icon URLs, and `sw.js?v1.0.1`. The HTML links use that query. Raising the version changes every URL, and the service worker drops the previous cache when it activates. The `v1.0.1` tag is this release. A cookieless probe that is redirected to a sign-in page is retried with the browser cookies.
+The interface version is `1.0.3`. Settings shows it as “Interface 1.0.3”, and adds the daemon version when `session_get` has returned one. The same string is the cache-busting query on every static file: `app.css?v1.0.3`, `app.js?v1.0.3`, `manifest.webmanifest?v1.0.3`, icon URLs, and `sw.js?v1.0.3`. The HTML links use that query. Raising the version changes every URL, and the service worker drops the previous cache when it activates. The latest published release tag is `v1.0.1`. A cookieless probe that is redirected to a sign-in page is retried with the browser cookies.
 
 `Deployment/webui` also contains an empty `default.json`. Leave that file in the web home. It is there so Transmission does not report a missing `default.json` when it starts.
 
@@ -372,7 +372,7 @@ Other library filters, still using only the polled fields:
 | Finished | `percent_done` is at least 1 |
 | Error | `error_string` is not empty |
 
-A torrent can sit in both Downloading and Error. Counts are independent. Search is a case-insensitive substring of `name`, applied in the page, with no extra RPC. The default sort is by name. Column headers sort by any polled field. Sort and the current filter are remembered in `localStorage`.
+A torrent can sit in both Downloading and Error. Counts are independent. The filters are shown in this order: All, Downloading, Active, Seeding, Stopped, Finished, Checking, Error. Choosing the filter that is already selected, other than All, returns to All. Search is a case-insensitive substring of `name`, applied in the page, with no extra RPC. The name field does not offer previous entries. The default sort is by name. Column headers sort by any polled field. Sort and the current filter are remembered in `localStorage`.
 
 ### How values are shown
 
@@ -430,11 +430,11 @@ On a phone the table becomes cards, filters become a scrolling row of chips, and
 
 ![Library on a phone.](mockups/library-mobile.png)
 
-Several torrents can be acted on together. On a wide window: click selects one row, shift-click selects a range, and command- or control-click toggles a row. Escape clears the selection. On a phone, a tap opens that torrent, unless select mode is on.
+Several torrents can be acted on together. On a wide window: click selects one row and opens its inspector on Overview, shift-click selects a range, and command- or control-click toggles a row. Clicking that same torrent again, or clicking empty space in the list, clears the selection and closes the inspector. Clicking a different torrent keeps the inspector open and shows that torrent, again on Overview. Escape clears the selection. On a phone, a tap opens that torrent on Overview and closes any open menu or truncation popup, unless select mode is on. The browser back gesture returns from the inspector to the list. From the list, the same gesture leaves the app.
 
 The toolbar is one row at every width: Filter by name, and Add. Start, Stop, Verify, Remove, More, Select, and Lock are not on the toolbar. The toolbar and the phone chip row are hidden when the view is not Torrents. The sidebar filters stay visible, and a filter is marked active only on the Torrents view. Torrent actions live on the inspector and on the popup menu.
 
-Right-click on a wide window, and a long press on a phone, open the same popup menu. `user-select: none` and `-webkit-touch-callout: none` keep the long press from selecting text or showing the browser callout. If the pressed row is already in the selection, the menu applies to every selected id. Otherwise it applies to that row. The menu lists Start, Stop, Start now, Verify, Reannounce, Rename (one torrent), Set location, Move to top, Move up, Move down, Move to bottom, and Remove.
+Right-click on a wide window, and a long press on a phone, open the same popup menu. `user-select: none` and `-webkit-touch-callout: none` keep the long press from selecting text or showing the browser callout. If the pressed row is already in the selection, the menu applies to every selected id. Otherwise it applies to that row. The menu lists Start, Stop, Start now, Verify, Reannounce, and Remove. Rename, Set location, and the queue moves are not in the menu or on the inspector.
 
 The menu also offers Select, except when select mode is already on and the pressed row is part of the selection, and except when the menu was opened from More on the inspector. Choosing Select enters select mode with that torrent, or keeps the current multi-selection when the menu applies to all of it. A banner at the bottom of the workspace shows how many torrents are selected, and an X that leaves select mode and clears the selection. In select mode a plain click toggles the row, on a wide window and on a phone. Checkboxes are shown while selecting. On a phone the selecting row is a two-column grid: the checkbox beside the card, and the progress bar on the next row at full width.
 
@@ -457,7 +457,6 @@ Transmission has no separate pause method. Stop is `torrent_stop`, which is how 
 | Stop | `torrent_stop` | `ids` |
 | Verify | `torrent_verify` | `ids` |
 | Reannounce | `torrent_reannounce` | `ids` |
-| Queue | `queue_move_top`, `queue_move_up`, `queue_move_down`, `queue_move_bottom` | `ids` |
 
 Remove asks first. The calm choice removes the torrents and leaves the files: `torrent_remove` with `delete_local_data: false`. The other choice deletes the downloaded files. That choice is a second confirmation that names the count, then `delete_local_data: true`.
 
@@ -467,7 +466,7 @@ Verifying rows say “Verifying” or “Queued to verify”. The library poll d
 
 ## 9. Inspector, add, and files
 
-One selected torrent opens an inspector. On a wide window it is a third column. On a narrower window it replaces the list. Close is the X described in section 8. There is no Back button.
+One selected torrent opens an inspector on the Overview tab. On a wide window it is a third column. On a narrower window it replaces the list, and the page adds a history entry so the browser back gesture returns to the list. Close is the X described in section 8. There is no Back button. Opening the inspector closes any menu or truncation popup.
 
 ![Inspector beside the list.](mockups/inspector-desktop.png)
 
@@ -509,15 +508,11 @@ Per-torrent controls write through `torrent_set`:
 - Seed ratio and idle time: mode `0` follows the session, `1` uses this torrent’s limit, `2` is unlimited.
 - Labels, peer limit, bandwidth group, and `sequential_download`.
 
-Files lists `files` in order. A checkbox writes `files_wanted` or `files_unwanted` with the file’s index. Priority writes `priority_high`, `priority_normal`, or `priority_low`. An empty array means every file, so the client sends explicit indices.
+Files lists `files` in order. A checkbox writes `files_wanted` or `files_unwanted` with the file’s index. Priority writes `priority_high`, `priority_normal`, or `priority_low`. An empty array means every file, so the client sends explicit indices. Renaming one file calls `torrent_rename_path` with `ids`, `path`, and `name`, then refreshes `files` and `name`. The torrent itself is not renamed from this page, and Set location is not offered.
 
 Peers lists the `peers` array in a grid: address, client, progress, down, and up. On a phone the numeric columns stay visible. An empty list says no peers are connected. `peers_from` is a short breakdown: tracker, incoming, cache, DHT, PEX, LPD, and LTEP.
 
 Trackers edits `tracker_list`: one announce URL per line, and a blank line between tiers. Saving calls `torrent_set`. The deprecated tracker add, remove, and replace arguments are not used.
-
-Rename, for a single torrent, calls `torrent_rename_path` with `ids`, `path`, and `name`, then refreshes `files` and `name`.
-
-Set location calls `torrent_set_location` with `location` and `move: true` to move the files, or `move: false` to look for them in the new directory.
 
 Several selected torrents show a short summary from the library fields (count, size, combined rates) and the bulk actions. They do not load peers or files.
 
@@ -592,7 +587,7 @@ Touch targets that are tapped are at least 44px on the short side. Rows on a wid
 
 The viewport is `width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no`, and the root uses `touch-action: manipulation`, so the page does not pinch-zoom or double-tap zoom. Displayed text uses `user-select: none` and `-webkit-user-select: none`. Fields that are typed into keep a caret, so a password or a path can still be entered. This is a deliberate limit: the page cannot be zoomed, and torrent names cannot be selected. Targets stay at least 44px so the phone layout remains usable at the browser’s own scale.
 
-The reconnecting banner sits above the list and does not cover the last row. Empty library: “No torrents yet” and the Add action. Empty filter: “Nothing in this filter” and a way back to All.
+The reconnecting banner sits above the list and does not cover the last row. Empty library: “No torrents yet”, with Add only in the toolbar. Empty filter: “Nothing in this filter” and a way back to All.
 
 ## 12. Colour and title
 
@@ -717,7 +712,7 @@ The interface is ready when all of the following hold.
 4. A captured library request is JSON-RPC 2.0: `jsonrpc`, `method` `torrent_get`, `params.fields` exactly `id`, `name`, `status`, `percent_done`, `rate_download`, `rate_upload`, `eta`, `total_size`, `upload_ratio`, `error_string`, and an `id`. The next one starts about 2 seconds later while the tab is visible. A daemon whose `rpc_version_semver` is below `6.0.0` never shows the library.
 5. Hiding the tab stops the poll. Showing it polls immediately.
 6. A `401` during a poll returns to the lock screen and drops the torrent list from the page.
-7. Add by file and add by magnet both call `torrent_add`. Remove, remove-and-delete, start, stop, verify, and queue move call the methods in the tables above. Stop is the pause action. Selecting several torrents sends one call with those `ids`.
+7. Add by file and add by magnet both call `torrent_add`. Remove, remove-and-delete, start, stop, and verify call the methods in the tables above. Stop is the pause action. Selecting several torrents sends one call with those `ids`.
 8. Changing the base colour or the page title repaints this page, including the favicon and `document.title`, once the change is stored. Another window of this browser shows that colour and title after it is opened or refreshed. Another browser, and another device, keep their own. `theme-color` matches the accent. The sidebar shows `location.host`. Light and dark stay on the browser that set them.
 9. At 390px width the library, a torrent, add, and settings are each usable without a horizontal page scroll and without the document scrolling. At 1440px the list and the inspector are on screen together. Those layouts are flex and grid. Lists scroll inside the app. The toolbar is Filter by name and Add on one row. The inspector closes with an X and has no Back control. There is no Shut down control.
 10. Status text is present for downloading, seeding, stopped, verifying, and errors. A complete torrent is green, as in section 8. The piece map uses the colours in section 9, and its key does not list Downloading. Every status string is a label for the latest `status` or `error_string` from `torrent_get`. An unknown `eta` is ∞. The percentage beside a progress bar shows two decimal places and is not 100% until `percent_done` is at least 1. Speeds, sizes, ratios, and dates are human-readable. Finished uses that same complete test.

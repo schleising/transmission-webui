@@ -4,7 +4,7 @@
   var DETAIL_FIELDS = ["id", "name", "status", "error", "error_string", "percent_done", "percent_complete", "recheck_progress", "rate_download", "rate_upload", "eta", "upload_ratio", "total_size", "size_when_done", "have_valid", "have_unchecked", "downloaded_ever", "uploaded_ever", "left_until_done", "download_dir", "hash_string", "is_private", "comment", "labels", "queue_position", "peers_connected", "magnet_link", "bandwidth_priority", "honors_session_limits", "download_limit", "download_limited", "upload_limit", "upload_limited", "seed_ratio_mode", "seed_ratio_limit", "seed_idle_mode", "seed_idle_limit", "peer_limit", "group", "sequential_download", "sequential_download_from_piece", "files", "file_stats", "wanted", "priorities", "peers", "peers_from", "trackers", "tracker_stats", "tracker_list", "pieces", "availability", "piece_count", "piece_size"];
   var SESSION_FIELDS = ["speed_limit_down", "speed_limit_down_enabled", "speed_limit_up", "speed_limit_up_enabled", "alt_speed_down", "alt_speed_up", "alt_speed_enabled", "alt_speed_time_enabled", "alt_speed_time_begin", "alt_speed_time_end", "alt_speed_time_day", "download_dir", "incomplete_dir", "incomplete_dir_enabled", "start_added_torrents", "rename_partial_files", "trash_original_torrent_files", "script_torrent_done_filename", "script_torrent_done_enabled", "script_torrent_added_filename", "script_torrent_added_enabled", "script_torrent_done_seeding_filename", "script_torrent_done_seeding_enabled", "seed_ratio_limited", "seed_ratio_limit", "idle_seeding_limit_enabled", "idle_seeding_limit", "peer_port", "peer_port_random_on_start", "port_forwarding_enabled", "encryption", "peer_limit_global", "peer_limit_per_torrent", "dht_enabled", "pex_enabled", "lpd_enabled", "preferred_transports", "download_queue_enabled", "download_queue_size", "seed_queue_enabled", "seed_queue_size", "queue_stalled_enabled", "queue_stalled_minutes", "blocklist_enabled", "blocklist_url", "blocklist_size", "version", "rpc_version_semver", "units"];
   var STATUS = ["Stopped", "Queued to verify", "Verifying", "Queued to download", "Downloading", "Queued to seed", "Seeding"];
-  var FILTERS = [["all", "All"], ["downloading", "Downloading"], ["seeding", "Seeding"], ["stopped", "Stopped"], ["checking", "Checking"], ["error", "Error"], ["active", "Active"], ["finished", "Finished"]];
+  var FILTERS = [["all", "All"], ["downloading", "Downloading"], ["active", "Active"], ["seeding", "Seeding"], ["stopped", "Stopped"], ["finished", "Finished"], ["checking", "Checking"], ["error", "Error"]];
   var ACTIONS = {
     start: "torrent_start",
     "start-now": "torrent_start_now",
@@ -23,6 +23,8 @@
   var pollGeneration = 0;
   var press = null;
   var suppressClick = false;
+  var detailPushed = false;
+  var ignorePop = false;
   var sort = { key: "name", dir: 1 };
   try { sort = JSON.parse(localStorage.getItem("twui.sort")) || sort; } catch (e) { sort = { key: "name", dir: 1 }; }
 
@@ -659,7 +661,7 @@
     return html;
   }
   function shellHtml() {
-    return '<div id="shell" class="shell"><aside class="sidebar"><div class="brand">' + markSvg() + '<div class="brand-copy"><div class="brand-name clip" data-brand data-full="' + esc(state.title) + '">' + esc(state.title) + '</div><div class="host clip" data-full="' + esc(location.host) + '">' + esc(location.host) + '</div></div></div><nav class="nav" aria-label="Sections"><button type="button" class="nav-btn" data-act="view" data-view="torrents">Torrents</button><button type="button" class="nav-btn" data-act="view" data-view="activity">Activity</button><button type="button" class="nav-btn" data-act="view" data-view="settings">Settings</button></nav><div class="filters" aria-label="Filters">' + filterButtons("filter-btn") + '</div><div class="speeds"><div><span>Down</span><strong class="slot" data-speed="down"></strong></div><div><span>Up</span><strong class="slot" data-speed="up"></strong></div></div></aside><div class="workspace"><header class="phone-head"><div class="brand">' + markSvg() + '<div class="brand-copy"><div class="brand-name clip" data-brand data-full="' + esc(state.title) + '">' + esc(state.title) + '</div><div class="host clip" data-full="' + esc(location.host) + '">' + esc(location.host) + '</div></div></div><div class="speeds"><div><span>Down</span><strong data-speed="down"></strong></div><div><span>Up</span><strong data-speed="up"></strong></div></div></header><div class="chips" aria-label="Library">' + filterButtons("chip") + '</div><div class="toolbar"><input id="search" class="search" type="search" placeholder="Filter by name" aria-label="Filter by name" value="' + esc(state.query) + '"><button type="button" class="primary" data-act="add">Add</button></div><div id="banner" class="banner" hidden></div><div id="list-scroll" class="scroller"></div><div id="select-banner" class="select-banner" hidden></div></div><aside id="inspector" class="inspector" aria-label="Torrent"></aside><nav class="tabbar" aria-label="Sections"><button type="button" class="bar-btn" data-act="view" data-view="torrents">Torrents</button><button type="button" class="bar-btn" data-act="view" data-view="activity">Activity</button><button type="button" class="bar-btn" data-act="view" data-view="settings">Settings</button></nav></div><div id="dialog-root"></div><div id="menu" class="menu" role="menu" hidden></div><div id="tip" class="tip" role="tooltip" hidden></div>';
+    return '<div id="shell" class="shell"><aside class="sidebar"><div class="brand">' + markSvg() + '<div class="brand-copy"><div class="brand-name clip" data-brand data-full="' + esc(state.title) + '">' + esc(state.title) + '</div><div class="host clip" data-full="' + esc(location.host) + '">' + esc(location.host) + '</div></div></div><nav class="nav" aria-label="Sections"><button type="button" class="nav-btn" data-act="view" data-view="torrents">Torrents</button><button type="button" class="nav-btn" data-act="view" data-view="activity">Activity</button><button type="button" class="nav-btn" data-act="view" data-view="settings">Settings</button></nav><div class="filters" aria-label="Filters">' + filterButtons("filter-btn") + '</div><div class="speeds"><div><span>Down</span><strong class="slot" data-speed="down"></strong></div><div><span>Up</span><strong class="slot" data-speed="up"></strong></div></div></aside><div class="workspace"><header class="phone-head"><div class="brand">' + markSvg() + '<div class="brand-copy"><div class="brand-name clip" data-brand data-full="' + esc(state.title) + '">' + esc(state.title) + '</div><div class="host clip" data-full="' + esc(location.host) + '">' + esc(location.host) + '</div></div></div><div class="speeds"><div><span>Down</span><strong data-speed="down"></strong></div><div><span>Up</span><strong data-speed="up"></strong></div></div></header><div class="chips" aria-label="Library">' + filterButtons("chip") + '</div><div class="toolbar"><input id="search" class="search" type="text" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" placeholder="Filter by name" aria-label="Filter by name" value="' + esc(state.query) + '"><button type="button" class="primary" data-act="add">Add</button></div><div id="banner" class="banner" hidden></div><div id="list-scroll" class="scroller"></div><div id="select-banner" class="select-banner" hidden></div></div><aside id="inspector" class="inspector" aria-label="Torrent"></aside><nav class="tabbar" aria-label="Sections"><button type="button" class="bar-btn" data-act="view" data-view="torrents">Torrents</button><button type="button" class="bar-btn" data-act="view" data-view="activity">Activity</button><button type="button" class="bar-btn" data-act="view" data-view="settings">Settings</button></nav></div><div id="dialog-root"></div><div id="menu" class="menu" role="menu" hidden></div><div id="tip" class="tip" role="tooltip" hidden></div>';
   }
   function applyLibraryTorrent(torrent) {
     if (!state.detail || state.detail.id !== torrent.id) return;
@@ -682,8 +684,9 @@
     }
     var rows = visibleTorrents();
     if (!rows.length) {
-      var empty = !state.torrents.length && state.filter === "all" && !state.query.trim();
-      return '<div class="note"><p>' + (empty ? "No torrents yet" : "Nothing in this filter") + '</p><button type="button" class="primary" data-act="' + (empty ? "add" : "filter") + '"' + (empty ? "" : ' data-filter="all"') + '>' + (empty ? "Add" : "Show all") + '</button></div>';
+      var libraryEmpty = !state.torrents.length && state.filter === "all" && !state.query.trim();
+      if (libraryEmpty) return '<div class="note"><p>No torrents yet</p></div>';
+      return '<div class="note"><p>Nothing in this filter</p><button type="button" class="primary" data-act="filter" data-filter="all">Show all</button></div>';
     }
     var head = '<div class="head-row" role="row"><div class="head-main"><button type="button" class="left" data-act="sort" data-sort="name">Name</button><button type="button" class="left" data-act="sort" data-sort="percent_done">Progress</button></div><button type="button" class="num" data-act="sort" data-sort="total_size">Size</button><button type="button" class="num" data-act="sort" data-sort="rate_download">Down</button><button type="button" class="num" data-act="sort" data-sort="rate_upload">Up</button><button type="button" class="num" data-act="sort" data-sort="eta">ETA</button><button type="button" class="num" data-act="sort" data-sort="upload_ratio">Ratio</button></div>';
     return head + rows.map(rowHtml).join("");
@@ -729,7 +732,6 @@
       }).join("") + '</select></label>';
     }
     if (state.sequentialSupported && "sequential_download" in detail) controls += checkTorrent("sequential_download", "Download in order", detail.sequential_download);
-    controls += '<button type="button" class="ghost" data-act="rename-torrent">Rename</button>';
     var fraction = shownFraction(detail);
     var progress = '<div class="inspector-progress"><span class="' + barClass(detail) + '" data-live-progress><span style="width:' + progressWidth(fraction) + '"></span></span><span class="pct" data-live-percent>' + esc(progressText(fraction)) + '</span></div>';
     var legend = '<p class="piece-key"><span><i class="piece-missing"></i>Not downloaded</span><span><i class="piece-unavailable"></i>Not available</span><span><i class="piece-have"></i>Downloaded</span></p>';
@@ -1279,8 +1281,10 @@
         if (result.torrent_duplicate) state.actionError = "This torrent is already present.";
         if (added && added.id != null) {
           state.selected = new Set([added.id]);
+          state.tab = "overview";
           state.detailOpen = !Twui.wide.matches;
           state.anchor = added.id;
+          if (state.detailOpen) pushDetailHistory();
         }
         tick();
       }, function (err) {
@@ -1331,13 +1335,12 @@
   }
   function menuHtml() {
     var ids = state.menuIds || [];
-    var single = ids.length === 1;
     var inSelection = state.selectMode && ids.length > 0 && ids.every(function (id) { return state.selected.has(id); });
-    var items = [["start", "Start"], ["stop", "Stop"], ["start-now", "Start now"], ["verify", "Verify"], ["reannounce", "Reannounce"], ["rename-torrent", "Rename"], ["location", "Set location"], ["queue-top", "Move to top"], ["queue-up", "Move up"], ["queue-down", "Move down"], ["queue-bottom", "Move to bottom"], ["remove", "Remove"]];
+    var items = [["start", "Start"], ["stop", "Stop"], ["start-now", "Start now"], ["verify", "Verify"], ["reannounce", "Reannounce"], ["remove", "Remove"]];
     var offerSelect = state.menuOfferSelect !== false && !inSelection;
     var select = offerSelect ? '<button type="button" role="menuitem" data-act="select-row">Select</button><div class="menu-rule"></div>' : "";
     return select + items.map(function (item) {
-      var disabled = state.pendingAction === item[0] || (item[0] === "rename-torrent" && !single) ? " disabled" : "";
+      var disabled = state.pendingAction === item[0] ? " disabled" : "";
       return '<button type="button" role="menuitem" data-act="' + item[0] + '"' + disabled + ">" + item[1] + "</button>";
     }).join("");
   }
@@ -1392,6 +1395,30 @@
     var tip = document.getElementById("tip");
     if (tip) tip.hidden = true;
   }
+  function pushDetailHistory() {
+    if (Twui.wide.matches || detailPushed) return;
+    history.pushState({ twuiDetail: true }, "");
+    detailPushed = true;
+  }
+  function closeMobileDetail(fromPop) {
+    state.selected = new Set();
+    state.detail = null;
+    state.detailOpen = false;
+    hideTip();
+    closeMenu();
+    paintLive();
+    var scroller = document.getElementById("list-scroll");
+    if (scroller) scroller.scrollTop = state.listScroll || 0;
+    if (fromPop) {
+      detailPushed = false;
+      return;
+    }
+    if (detailPushed) {
+      detailPushed = false;
+      ignorePop = true;
+      history.back();
+    }
+  }
   function selectOnly(id) {
     state.selected = new Set([id]);
     state.anchor = id;
@@ -1424,9 +1451,13 @@
     if (!Twui.wide.matches) {
       var scroller = document.getElementById("list-scroll");
       state.listScroll = scroller ? scroller.scrollTop : 0;
+      hideTip();
+      closeMenu();
+      state.tab = "overview";
       selectOnly(id);
       state.detailOpen = true;
       state.detail = null;
+      pushDetailHistory();
       paintLive();
       fetchDetail(id).then(function (result) {
         if (result.torrents && result.torrents[0]) state.detail = result.torrents[0];
@@ -1438,7 +1469,18 @@
     }
     if (event.shiftKey && state.anchor != null) selectRange(id);
     else if (event.metaKey || event.ctrlKey) toggleSelected(id);
-    else selectOnly(id);
+    else if (state.selected.size === 1 && state.selected.has(id)) {
+      hideTip();
+      state.selected = new Set();
+      state.detail = null;
+      state.detailOpen = false;
+      paintLive();
+      return;
+    } else {
+      hideTip();
+      state.tab = "overview";
+      selectOnly(id);
+    }
     state.detailOpen = false;
     if (state.selected.size === 1) {
       state.detail = null;
@@ -1457,7 +1499,8 @@
     if (event.target.closest("#menu") && !act) return;
     if (!event.target.closest("#menu")) closeMenu();
     if (!event.target.closest("#tip") && !event.target.closest("[data-full]")) hideTip();
-    if (event.target.closest("[data-full]") && !Twui.fine.matches) {
+    var openingRow = row && !act && !state.selectMode && !event.target.matches("[data-check]");
+    if (event.target.closest("[data-full]") && !Twui.fine.matches && !openingRow) {
       var full = event.target.closest("[data-full]");
       showTip(full.getAttribute("data-full") || full.textContent, event.clientX, event.clientY);
     }
@@ -1475,6 +1518,14 @@
     }
     if (!act) {
       if (event.target.classList && event.target.classList.contains("scrim")) closeDialog();
+      if (Twui.wide.matches && state.view === "torrents" && state.selected.size && event.target.closest("#list-scroll") && !row) {
+        hideTip();
+        closeMenu();
+        state.selected = new Set();
+        state.detail = null;
+        state.detailOpen = false;
+        paintLive();
+      }
       return;
     }
     var name = act.dataset.act;
@@ -1482,13 +1533,20 @@
       state.view = act.dataset.view;
       state.rebuildSettings = state.view === "settings";
       if (state.view === "settings" && !state.session) loadSession();
+      var leavingDetail = state.detailOpen && !Twui.wide.matches;
       state.detailOpen = false;
+      if (leavingDetail && detailPushed) {
+        detailPushed = false;
+        ignorePop = true;
+        history.back();
+      }
       paintLive();
       if (state.view === "torrents") tick();
       return;
     }
     if (name === "filter") {
-      state.filter = act.dataset.filter;
+      var nextFilter = act.dataset.filter;
+      state.filter = nextFilter !== "all" && nextFilter === state.filter ? "all" : nextFilter;
       state.view = "torrents";
       localStorage.setItem("twui.filter", state.filter);
       paintLive();
@@ -1533,10 +1591,13 @@
       return;
     }
     if (name === "close-inspector") {
-      state.selected = new Set();
-      state.detail = null;
-      state.detailOpen = false;
-      paintLive();
+      if (!Twui.wide.matches) closeMobileDetail(false);
+      else {
+        state.selected = new Set();
+        state.detail = null;
+        state.detailOpen = false;
+        paintLive();
+      }
       return;
     }
     if (name === "back") {
@@ -1836,8 +1897,7 @@
       }
       hideTip();
       if (state.detailOpen && !Twui.wide.matches) {
-        state.detailOpen = false;
-        paintLive();
+        closeMobileDetail(false);
         return;
       }
       state.selected = new Set();
@@ -1878,7 +1938,15 @@
   Twui.wide = window.matchMedia("(min-width: 1100px)");
   Twui.fine = window.matchMedia("(hover: hover) and (pointer: fine)");
   Twui.wide.addEventListener("change", function () { if (state.mode === "live") paintLive(); });
+  window.addEventListener("popstate", function () {
+    if (ignorePop) {
+      ignorePop = false;
+      return;
+    }
+    if (!detailPushed) return;
+    closeMobileDetail(true);
+  });
 
-  if ("serviceWorker" in navigator) navigator.serviceWorker.register(location.origin + "/transmission/web/sw.js?v1.0.1").catch(function () {});
+  if ("serviceWorker" in navigator) navigator.serviceWorker.register(location.origin + "/transmission/web/sw.js?v1.0.3").catch(function () {});
   probe();
 })();

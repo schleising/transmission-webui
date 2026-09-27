@@ -2,7 +2,7 @@
 
 A browser interface for a [Transmission](https://transmissionbt.com/) daemon. It is a static page: it has no server of its own, and the only password is the one that daemon already requires. Transmission 4.1 or newer serves the page from `TRANSMISSION_WEB_HOME` and answers JSON-RPC 2.0 at `/transmission/rpc`.
 
-The interface version is 1.0.1. Settings shows that version, and the daemon version once the session has been read. Copy on screen uses British spelling. RPC names stay as Transmission spells them.
+The interface version is 1.0.3. Settings shows that version, and the daemon version once the session has been read. Copy on screen uses British spelling. RPC names stay as Transmission spells them.
 
 The behaviour of the page is written up in [Design/transmission-webui.md](Design/transmission-webui.md). The pictures in that folder are earlier mockups.
 
@@ -10,8 +10,8 @@ The behaviour of the page is written up in [Design/transmission-webui.md](Design
 
 - Browse the torrent library, filter it, and search by name.
 - Add a `.torrent` file, a magnet link, or an HTTP URL.
-- Open one torrent for its progress, piece map, files, peers, and trackers.
-- Start, stop, verify, reannounce, queue, rename, move, and remove torrents. Stop is how a torrent is paused. Removing can leave the files on disk, or delete them after a second confirmation.
+- Open one torrent for its progress, piece map, files, peers, and trackers. It opens on Overview. On a wide window, clicking that torrent again, or empty space in the list, closes it. On a phone, the browser back gesture returns to the list.
+- Start, stop, verify, reannounce, and remove torrents. A file can be renamed from the Files tab. Stop is how a torrent is paused. Removing can leave the files on disk, or delete them after a second confirmation.
 - Select several torrents and run one action on all of them.
 - Read session totals on Activity, and edit the daemon’s speed, download, seeding, connection, queue, blocklist, and bandwidth-group settings.
 - Choose a colour and a window title for this address, in this browser.
@@ -92,7 +92,7 @@ Use your own `server_name` and upstream port. `client_max_body_size 16m` leaves 
 
 The sidebar, or the bottom bar on a phone, has Torrents, Activity, and Settings. Session speeds sit under the title. The hostname under the title is the address you opened.
 
-**Torrents.** Filter by name in the toolbar, and use the sidebar or the chips for All, Downloading, Seeding, Stopped, Checking, Error, Active, and Finished. Finished means the torrent’s `percent_done` is at least 1. Column headers sort the list. The percentage beside a bar shows two decimal places and does not read 100% until the torrent is complete. A complete row is green.
+**Torrents.** Filter by name in the toolbar. That field does not offer previous entries. The sidebar and the chips list All, Downloading, Active, Seeding, Stopped, Finished, Checking, and Error. Choosing the selected filter again, other than All, returns to All. Finished means the torrent’s `percent_done` is at least 1. Column headers sort the list. The percentage beside a bar shows two decimal places and does not read 100% until the torrent is complete. A complete row is green.
 
 Click a torrent to open it. On a wide window the inspector is a column beside the list. On a narrower window it replaces the list. The X closes it and clears the selection. Overview, Files, Peers, and Trackers are the four tabs. Overview includes the piece map: grey is not downloaded, red is not available, and green is downloaded.
 
