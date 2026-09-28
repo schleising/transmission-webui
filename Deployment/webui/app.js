@@ -475,6 +475,13 @@
       var done = info.bytes_completed != null ? info.bytes_completed : file.bytes_completed;
       node.textContent = Twui.formatBytes(done, state.units) + " of " + Twui.formatBytes(file.length, state.units);
     });
+    inspector.querySelectorAll("[data-file-bar]").forEach(function (node) {
+      var index = Number(node.dataset.fileBar);
+      var info = stats[index] || {};
+      var file = files[index] || {};
+      var done = info.bytes_completed != null ? info.bytes_completed : file.bytes_completed;
+      node.style.width = progressWidth(fileFraction(done, file.length));
+    });
   }
 
   function failAuthOff() {
@@ -524,7 +531,7 @@
   }
   function registerWorker() {
     if (!("serviceWorker" in navigator)) return;
-    navigator.serviceWorker.register(location.origin + "/transmission/web/sw.js?v1.0.19").catch(function () {});
+    navigator.serviceWorker.register(location.origin + "/transmission/web/sw.js?v1.0.24").catch(function () {});
   }
   function probe() {
     state.mode = "probing";
@@ -883,19 +890,33 @@
   function checkTorrent(key, label, checked) {
     return '<label class="field check"><input type="checkbox" data-torrent="' + key + '"' + (checked ? " checked" : "") + (state.pendingKeys[key] ? " disabled" : "") + "> " + label + "</label>";
   }
+  function fileFraction(done, length) {
+    var have = Number(done);
+    var size = Number(length);
+    if (!Number.isFinite(have) || have < 0) have = 0;
+    if (!Number.isFinite(size) || size <= 0) return have > 0 ? 1 : 0;
+    return have / size;
+  }
   function filesHtml(detail) {
     if (!detail.files) return '<p class="note">Reading…</p>';
     var files = detail.files;
     var stats = detail.file_stats || [];
     if (!files.length) return '<p class="note">This torrent has no files.</p>';
-    return files.map(function (file, index) {
+    var cards = files.map(function (file, index) {
       var info = stats[index] || {};
       var wanted = "wanted" in info ? info.wanted : (detail.wanted || [])[index];
       var priority = "priority" in info ? info.priority : (detail.priorities || [])[index];
       var done = info.bytes_completed != null ? info.bytes_completed : file.bytes_completed;
       var disabled = state.pendingKeys["file-" + index] ? " disabled" : "";
-      return '<div class="file"><div class="clip" data-full="' + esc(file.name) + '">' + esc(file.name) + '</div><div class="muted" data-file-done="' + index + '">' + esc(Twui.formatBytes(done, state.units)) + " of " + esc(Twui.formatBytes(file.length, state.units)) + '</div><label class="check"><input type="checkbox" data-file="' + index + '"' + (wanted ? " checked" : "") + disabled + '> Download</label><label class="field">Priority<select data-priority="' + index + '"><option value="-1"' + (priority === -1 ? " selected" : "") + '>Low</option><option value="0"' + (priority === 0 ? " selected" : "") + '>Normal</option><option value="1"' + (priority === 1 ? " selected" : "") + '>High</option></select></label><button type="button" class="ghost" data-act="rename-file" data-path="' + esc(file.name) + '">Rename</button></div>';
+      var amount = Twui.formatBytes(done, state.units) + " of " + Twui.formatBytes(file.length, state.units);
+      return '<article class="info-card file-card"><div class="clip card-title" data-full="' + esc(file.name) + '">' + esc(file.name) + '</div><div class="bar"><span data-file-bar="' + index + '" style="width:' + progressWidth(fileFraction(done, file.length)) + '"></span></div><div class="card-sub" data-file-done="' + index + '">' + esc(amount) + '</div><div class="file-actions"><select data-priority="' + index + '" aria-label="Priority"><option value="-1"' + (priority === -1 ? " selected" : "") + '>Low</option><option value="0"' + (priority === 0 ? " selected" : "") + '>Normal</option><option value="1"' + (priority === 1 ? " selected" : "") + '>High</option></select><button type="button" class="ghost" data-act="rename-file" data-path="' + esc(file.name) + '">Rename</button><label class="check"><input type="checkbox" data-file="' + index + '"' + (wanted ? " checked" : "") + disabled + '> Download</label></div></article>';
     }).join("");
+    return '<div class="card-grid">' + cards + '</div>';
+  }
+  function trackerCount(value) {
+    var n = Number(value);
+    if (!Number.isFinite(n) || n < 0) return "\u2014";
+    return Twui.formatCount(n);
   }
   function cardStat(label, value) {
     return '<div><span>' + esc(label) + '</span><strong>' + esc(value) + '</strong></div>';
@@ -907,16 +928,16 @@
       return '<div class="source-card"><span>' + item[0] + '</span><strong>' + Twui.formatCount(item[1] || 0) + '</strong></div>';
     }).join("");
     var peers = detail.peers || [];
-    var note = '<div class="source-grid">' + sources + '</div>';
-    if (!peers.length) return '<p>No peers are connected.</p>' + note;
+    var sourcesBlock = '<div class="source-lock"><p class="card-section">Where they came from</p><div class="source-grid">' + sources + '</div></div>';
+    if (!peers.length) return sourcesBlock + '<p>No peers are connected.</p>';
     var cards = peers.map(function (peer) {
       var address = peer.address || "";
       var full = address + (peer.is_encrypted ? " · encrypted" : "");
       var client = peer.client_name || "";
       var flag = peer.is_encrypted ? '<span class="flag">Encrypted</span>' : "";
-      return '<article class="peer-card"><div class="card-head"><div class="clip card-title" data-full="' + esc(full) + '">' + esc(address) + '</div>' + flag + '</div><div class="muted clip" data-full="' + esc(client) + '">' + esc(client) + '</div><div class="card-stats">' + cardStat("Progress", Twui.formatPercent(peer.progress)) + cardStat("Down", Twui.formatSpeed(peer.rate_to_client, state.units)) + cardStat("Up", Twui.formatSpeed(peer.rate_to_peer, state.units)) + '</div></article>';
+      return '<article class="info-card"><header class="card-head"><div class="card-copy"><div class="clip card-title" data-full="' + esc(full) + '">' + esc(address) + '</div><div class="card-sub clip" data-full="' + esc(client) + '">' + esc(client) + '</div></div>' + flag + '</header><div class="bar"><span style="width:' + progressWidth(peer.progress) + '"></span></div><div class="card-stats">' + cardStat("Progress", Twui.formatPercent(peer.progress)) + cardStat("Down", Twui.formatSpeed(peer.rate_to_client, state.units)) + cardStat("Up", Twui.formatSpeed(peer.rate_to_peer, state.units)) + '</div></article>';
     }).join("");
-    return note + '<div class="card-grid">' + cards + '</div>';
+    return sourcesBlock + '<div class="card-grid">' + cards + '</div>';
   }
   function trackersHtml(detail) {
     if (!detail.tracker_stats) return '<p class="note">Reading…</p>';
@@ -924,7 +945,8 @@
     var cards = list.map(function (tracker) {
       var text = tracker.announce || "";
       var result = tracker.last_announce_result || "No announce yet";
-      return '<article class="tracker-card"><div class="clip card-title" data-full="' + esc(text) + '">' + esc(text) + '</div><div class="muted clip" data-full="' + esc(result) + '">' + esc(result) + '</div><div class="card-stats two">' + cardStat("Seeding", Twui.formatCount(tracker.seeder_count || 0)) + cardStat("Downloading", Twui.formatCount(tracker.leecher_count || 0)) + '</div></article>';
+      var failed = tracker.last_announce_succeeded === false;
+      return '<article class="info-card"><div class="clip card-title" data-full="' + esc(text) + '">' + esc(text) + '</div><div class="card-sub clip' + (failed ? " bad" : "") + '" data-full="' + esc(result) + '">' + esc(result) + '</div><div class="card-stats two">' + cardStat("Seeding", trackerCount(tracker.seeder_count)) + cardStat("Downloading", trackerCount(tracker.leecher_count)) + '</div></article>';
     }).join("");
     var grid = cards ? '<div class="card-grid">' + cards + '</div>' : "";
     return grid + '<label class="field">Announce URLs, one per line. A blank line starts a new tier.<textarea id="tracker-list"' + (state.pendingKeys.tracker_list ? " disabled" : "") + '>' + esc(detail.tracker_list || "") + '</textarea></label><button type="button" class="primary" data-act="save-trackers"' + (state.pendingKeys.tracker_list ? " disabled" : "") + ">Save trackers</button>";

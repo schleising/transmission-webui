@@ -86,7 +86,7 @@ The client calls the absolute path `/transmission/rpc`. From a page at `/transmi
 
 ### Interface version
 
-The interface version is `1.0.19`. Settings shows it as “Interface 1.0.19”, and adds the daemon version when `session_get` has returned one. The same string is the cache-busting query on every static file: `app.css?v1.0.19`, `app.js?v1.0.19`, `manifest.webmanifest?v1.0.19`, icon URLs, and `sw.js?v1.0.19`. The HTML links use that query. Raising the version changes every URL, and the service worker drops the previous cache when it activates. The latest published release tag is `v1.0.19`. A cookieless probe that is redirected to a sign-in page is retried with the browser cookies.
+The interface version is `1.0.24`. Settings shows it as “Interface 1.0.24”, and adds the daemon version when `session_get` has returned one. The same string is the cache-busting query on every static file: `app.css?v1.0.24`, `app.js?v1.0.24`, `manifest.webmanifest?v1.0.24`, icon URLs, and `sw.js?v1.0.24`. The HTML links use that query. Raising the version changes every URL, and the service worker drops the previous cache when it activates. The latest published release tag is `v1.0.19`. A cookieless probe that is redirected to a sign-in page is retried with the browser cookies.
 
 `Deployment/webui` also contains an empty `default.json`. Leave that file in the web home. It is there so Transmission does not report a missing `default.json` when it starts.
 
@@ -514,11 +514,11 @@ Per-torrent controls write through `torrent_set`:
 - Seed ratio and idle time: mode `0` follows the session, `1` uses this torrent’s limit, `2` is unlimited.
 - Labels, peer limit, bandwidth group, and `sequential_download`.
 
-Files lists `files` in order. A checkbox writes `files_wanted` or `files_unwanted` with the file’s index. Priority writes `priority_high`, `priority_normal`, or `priority_low`. An empty array means every file, so the client sends explicit indices. Renaming one file calls `torrent_rename_path` with `ids`, `path`, and `name`, then refreshes `files` and `name`. The torrent itself is not renamed from this page, and Set location is not offered.
+Files are cards in a grid, in `files` order. Each card shows the name, a progress bar, and how much of that file is present. Download sits on the right of the action row, vertically centred with the priority menu and Rename. A checkbox writes `files_wanted` or `files_unwanted` with the file’s index. Priority writes `priority_high`, `priority_normal`, or `priority_low`. An empty array means every file, so the client sends explicit indices. Renaming one file calls `torrent_rename_path` with `ids`, `path`, and `name`, then refreshes `files` and `name`. The torrent itself is not renamed from this page, and Set location is not offered.
 
-Peers are cards in a grid. Each card shows the address, the client, and progress, down, and up. An encrypted peer is marked on the card. Where the peers came from is a grid of smaller cards: tracker, incoming, cache, DHT, PEX, LPD, and LTEP. An empty list says no peers are connected.
+Peers are cards in a grid. Each card shows the address, the client, a progress bar, and progress, down, and up. An encrypted peer is marked on the card. Where the peers came from is a grid of smaller cards at the top of the tab, under the heading “Where they came from”: tracker, incoming, cache, DHT, PEX, LPD, and LTEP. That grid stays in place while the peer list scrolls. An empty list says no peers are connected.
 
-Trackers are cards in a grid. Each card shows the announce URL, the last announce result, and the seeding and downloading counts. Below the cards, `tracker_list` is edited as one announce URL per line, and a blank line between tiers. Saving calls `torrent_set`. The deprecated tracker add, remove, and replace arguments are not used.
+Trackers are cards in a grid. Each card shows the announce URL, the last announce result, and the seeding and downloading counts. A failed announce uses the emphasis colour. A count Transmission has not reported is —. Below the cards, `tracker_list` is edited as one announce URL per line, and a blank line between tiers. Saving calls `torrent_set`. The deprecated tracker add, remove, and replace arguments are not used.
 
 Several selected torrents show a short summary from the library fields (count, size, combined rates) and the bulk actions. They do not load peers or files.
 
