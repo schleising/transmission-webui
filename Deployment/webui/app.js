@@ -531,7 +531,7 @@
   }
   function registerWorker() {
     if (!("serviceWorker" in navigator)) return;
-    navigator.serviceWorker.register(location.origin + "/transmission/web/sw.js?v1.0.30").catch(function () {});
+    navigator.serviceWorker.register(location.origin + "/transmission/web/sw.js?v1.0.31").catch(function () {});
   }
   function probe() {
     state.mode = "probing";

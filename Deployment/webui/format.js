@@ -86,6 +86,17 @@
   Twui.formatActiveTime = function (seconds) {
     var n = Number(seconds);
     if (!Number.isFinite(n) || n < 0) n = 0;
+    n = Math.round(n);
+    var year = 365 * 86400;
+    if (n >= year) {
+      var years = Math.floor(n / year);
+      var days = Math.floor((n - years * year) / 86400);
+      var weeks = Math.floor(days / 7);
+      days = days % 7;
+      if (weeks > 0) return years + "yr " + weeks + "wk";
+      if (days > 0) return years + "yr " + days + "d";
+      return years + "yr";
+    }
     return Twui.formatDuration(n);
   };
 

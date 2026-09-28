@@ -86,7 +86,7 @@ The client calls the absolute path `/transmission/rpc`. From a page at `/transmi
 
 ### Interface version
 
-The interface version is `1.0.30`. Settings shows it as “Interface 1.0.30”, and adds the daemon version when `session_get` has returned one. The same string is the cache-busting query on every static file: `app.css?v1.0.30`, `app.js?v1.0.30`, `manifest.webmanifest?v1.0.30`, icon URLs, and `sw.js?v1.0.30`. The HTML links use that query. Raising the version changes every URL, and the service worker drops the previous cache when it activates. The latest published release tag is `v1.0.19`. A cookieless probe that is redirected to a sign-in page is retried with the browser cookies.
+The interface version is `1.0.31`. Settings shows it as “Interface 1.0.31”, and adds the daemon version when `session_get` has returned one. The same string is the cache-busting query on every static file: `app.css?v1.0.31`, `app.js?v1.0.31`, `manifest.webmanifest?v1.0.31`, icon URLs, and `sw.js?v1.0.31`. The HTML links use that query. Raising the version changes every URL, and the service worker drops the previous cache when it activates. The latest published release tag is `v1.0.19`. A cookieless probe that is redirected to a sign-in page is retried with the browser cookies.
 
 `Deployment/webui` also contains an empty `default.json`. Leave that file in the web home. It is there so Transmission does not report a missing `default.json` when it starts.
 
@@ -387,7 +387,7 @@ The page keeps the raw numbers from RPC. Everything drawn on screen is formatted
 | `recheck_progress` on the inspector’s “Verifying” line, peer progress | A whole-number percentage from the 0–1 fraction. |
 | `upload_ratio` | Two decimal places. |
 | `eta` | The two largest units: seconds under a minute; minutes under an hour; hours and minutes under a day; days and hours under a week, or days and minutes when no hours remain; weeks and days from a week up. A zero second unit is left off, so a whole day is `1d` and a whole week is `1wk`. Any `eta` below 0 is ∞. |
-| `seconds_active` on Activity | The same two largest units as `eta`. A missing or negative value is `0 sec`. |
+| `seconds_active` on Activity | The same two largest units as `eta`, until the time reaches 365 days. Fifty-two weeks is 364 days, so it stays in weeks. From 365 days the largest unit is years: a whole year is `1yr`, leftover weeks are `1yr 2wk`, and leftover days are shown only when no whole week remains, as `1yr 3d`. A missing or negative value is `0 sec`. |
 | Unix timestamps | The local date and time. |
 | Counts | Grouped digits. |
 
@@ -538,7 +538,7 @@ Either `filename` or `metainfo` is required. A duplicate comes back as `result.t
 
 ## 10. Activity and session settings
 
-Activity reads `session_stats`: `download_speed`, `upload_speed`, `active_torrent_count`, `paused_torrent_count`, `torrent_count`, plus `current_stats` and `cumulative_stats` (`downloaded_bytes`, `uploaded_bytes`, `files_added`, `seconds_active`, `session_count`). Those numbers are already refreshed by the 2 second tick. Active time uses the same two largest units as an estimate. The wide layout also shows the current speeds at the bottom of the sidebar on every section. Speeds and byte totals are formatted with `units`, as in section 6.
+Activity reads `session_stats`: `download_speed`, `upload_speed`, `active_torrent_count`, `paused_torrent_count`, `torrent_count`, plus `current_stats` and `cumulative_stats` (`downloaded_bytes`, `uploaded_bytes`, `files_added`, `seconds_active`, `session_count`). Those numbers are already refreshed by the 2 second tick. Active time uses the same two largest units as an estimate until it reaches 365 days, and years from then on. The wide layout also shows the current speeds at the bottom of the sidebar on every section. Speeds and byte totals are formatted with `units`, as in section 6.
 
 Settings reads `session_get` when the section opens and again after each successful `session_set`. It does not poll the whole session every 2 seconds. Each control shows the value from that read. Changing a control sends `session_set`, disables that control, then `session_get` for the keys that were written, and the control updates from that second read, as in section 7.
 
