@@ -86,7 +86,7 @@ The client calls the absolute path `/transmission/rpc`. From a page at `/transmi
 
 ### Interface version
 
-The interface version is `1.0.28`. Settings shows it as “Interface 1.0.28”, and adds the daemon version when `session_get` has returned one. The same string is the cache-busting query on every static file: `app.css?v1.0.28`, `app.js?v1.0.28`, `manifest.webmanifest?v1.0.28`, icon URLs, and `sw.js?v1.0.28`. The HTML links use that query. Raising the version changes every URL, and the service worker drops the previous cache when it activates. The latest published release tag is `v1.0.19`. A cookieless probe that is redirected to a sign-in page is retried with the browser cookies.
+The interface version is `1.0.30`. Settings shows it as “Interface 1.0.30”, and adds the daemon version when `session_get` has returned one. The same string is the cache-busting query on every static file: `app.css?v1.0.30`, `app.js?v1.0.30`, `manifest.webmanifest?v1.0.30`, icon URLs, and `sw.js?v1.0.30`. The HTML links use that query. Raising the version changes every URL, and the service worker drops the previous cache when it activates. The latest published release tag is `v1.0.19`. A cookieless probe that is redirected to a sign-in page is retried with the browser cookies.
 
 `Deployment/webui` also contains an empty `default.json`. Leave that file in the web home. It is there so Transmission does not report a missing `default.json` when it starts.
 
@@ -442,7 +442,7 @@ The menu also offers Select, except when select mode is already on and the press
 
 The library row puts the progress bar on its own full-width line under the name, with the percentage on the right. The status chip is on its own row under the name, in the same colour as the bar. In the inspector the chip is on the row above the progress bar. The header groups Name and Progress, then Size, Downloaded, Down, Up, ETA, and Ratio. Those six headings are right-aligned with the figures beneath them. The grid is `minmax(0, 1fr) 5.6rem 6.6rem 5.6rem 5.6rem 4.6rem 3.6rem`. The progress cell spans every column.
 
-On a phone the row is a card. The status chip is under the name, with a small gap beneath it. Under that, the stats are a four-column grid of three rows, so each label and its value are separate cells and the values line up: Size, Downloaded, Down, Up, ETA, Ratio. On the card and on the desktop row, Size is `total_size` and Downloaded is `downloaded_ever`. Downloaded sits to the right of Size. ETA uses the two largest units from section 6.
+On a phone the row is a card. A subtle line separates each card from the next. The status chip is under the name, with a small gap beneath it. Under that, the stats are a four-column grid of three rows, so each label and its value are separate cells and the values line up: Size, Downloaded, Down, Up, ETA, Ratio. On the card and on the desktop row, Size is `total_size` and Downloaded is `downloaded_ever`. Downloaded sits to the right of Size. ETA uses the two largest units from section 6.
 
 A torrent with `percent_done` of at least 1 is finished. The row is not tinted. The bar and the chip follow the torrent’s status, not a separate complete colour.
 
