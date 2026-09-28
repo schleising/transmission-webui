@@ -97,7 +97,7 @@ If the page loses the daemon, it returns to the torrent list and shows Reconnect
 
 **Add.** Choose a torrent file, or paste a magnet link or address. The folder starts as the daemon’s download folder. The dialogue shows how much free space that folder has as you edit the path.
 
-**Activity** shows current speeds and the totals for this session and since the daemon was first used. Time spent active is given in days, hours, and minutes.
+**Activity** shows current speeds and the totals for this session and since the daemon was first used. Time spent active uses the same two largest units as a torrent’s time remaining.
 
 **Settings** changes the daemon. What you see updates after Transmission has stored the change. Settings also shows the interface version, and the Transmission version once the session has been read.
 

@@ -822,7 +822,7 @@
     if (!rows.length) {
       var libraryEmpty = !state.torrents.length && state.filter === "all" && !state.query.trim();
       if (libraryEmpty) return '<div class="status-center"><p>No torrents yet</p></div>';
-      return '<div class="note"><p>Nothing in this filter</p><button type="button" class="primary" data-act="filter" data-filter="all">Show all</button></div>';
+      return '<div class="status-center"><p>Nothing in this filter</p></div>';
     }
     var head = '<div class="head-row" role="row"><div class="head-main"><button type="button" class="left" data-act="sort" data-sort="name">Name</button><button type="button" class="left" data-act="sort" data-sort="percent_done">Progress</button></div><button type="button" class="num" data-act="sort" data-sort="total_size">Size</button><button type="button" class="num" data-act="sort" data-sort="downloaded_ever">Downloaded</button><button type="button" class="num" data-act="sort" data-sort="rate_download">Down</button><button type="button" class="num" data-act="sort" data-sort="rate_upload">Up</button><button type="button" class="num" data-act="sort" data-sort="eta">ETA</button><button type="button" class="num" data-act="sort" data-sort="upload_ratio">Ratio</button></div>';
     return head + rows.map(rowHtml).join("");
@@ -2157,6 +2157,6 @@
     closeMobileDetail(true);
   });
 
-  if ("serviceWorker" in navigator) navigator.serviceWorker.register(location.origin + "/transmission/web/sw.js?v1.0.17").catch(function () {});
+  if ("serviceWorker" in navigator) navigator.serviceWorker.register(location.origin + "/transmission/web/sw.js?v1.0.18").catch(function () {});
   probe();
 })();

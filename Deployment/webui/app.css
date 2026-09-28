@@ -168,6 +168,26 @@ input[type="search"], input[type="text"], input[type="number"], input[type="pass
   border-radius: 8px;
   padding: 8px 10px;
 }
+input[type="file"] {
+  width: 100%;
+  min-height: 44px;
+  border: 0;
+  background: transparent;
+  padding: 0;
+  color: var(--text);
+}
+input[type="file"]::file-selector-button,
+input[type="file"]::-webkit-file-upload-button {
+  margin-right: 12px;
+  border: 0;
+  border-radius: 8px;
+  min-height: 44px;
+  padding: 0 14px;
+  background: var(--accent);
+  color: var(--on-accent);
+  font: inherit;
+  cursor: pointer;
+}
 textarea { min-height: 120px; resize: vertical; }
 .primary, .danger {
   background: var(--accent);
