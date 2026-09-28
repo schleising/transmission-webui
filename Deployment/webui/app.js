@@ -2157,6 +2157,6 @@
     closeMobileDetail(true);
   });
 
-  if ("serviceWorker" in navigator) navigator.serviceWorker.register(location.origin + "/transmission/web/sw.js?v1.0.16").catch(function () {});
+  if ("serviceWorker" in navigator) navigator.serviceWorker.register(location.origin + "/transmission/web/sw.js?v1.0.17").catch(function () {});
   probe();
 })();

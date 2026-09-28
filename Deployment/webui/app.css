@@ -11,10 +11,12 @@
   --on-accent: #f4fbfa;
   --soft: #e3f3f1;
   --emphasis: #0c4a46;
-  --muted-fill: #8aa8a4;
-  --status-seed: #3d8f88;
-  --status-queue: #6f9e99;
-  --status-check: #0c4f4b;
+  --status-down: #1976d2;
+  --status-seed: #00c853;
+  --status-queue: #f9a825;
+  --status-check: #7e57c2;
+  --status-stop: #9a9a9a;
+  --status-error: #d32f2f;
   --scrim: oklch(0.25 0.03 190 / 0.42);
   --font: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
   --mono: ui-monospace, "SF Mono", Menlo, monospace;
@@ -250,7 +252,7 @@ html[style*="color-scheme: dark"] .head-row { background: var(--bg); }
   min-height: 22px;
   padding: 0 8px 0 6px;
   border-radius: 99px;
-  background: color-mix(in srgb, var(--chip, var(--accent)) 22%, var(--surface));
+  background: color-mix(in srgb, var(--chip, var(--status-stop)) 22%, var(--surface));
   color: var(--text);
   font-size: 12px;
   font-weight: 650;
@@ -261,15 +263,15 @@ html[style*="color-scheme: dark"] .head-row { background: var(--bg); }
   width: 8px;
   height: 8px;
   border-radius: 99px;
-  background: var(--chip, var(--accent));
+  background: var(--chip, var(--status-stop));
   flex: none;
 }
-.status.downloading { --chip: var(--accent); }
+.status.downloading { --chip: var(--status-down); }
 .status.seeding { --chip: var(--status-seed); }
 .status.queued { --chip: var(--status-queue); }
 .status.checking { --chip: var(--status-check); }
-.status.stopped { --chip: var(--muted-fill); }
-.status.error { --chip: var(--emphasis); }
+.status.stopped { --chip: var(--status-stop); }
+.status.error { --chip: var(--status-error); }
 .inspector-title { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: flex-start; gap: 6px; }
 .inspector-title h2 { width: 100%; }
 .inspector-title .sub { margin: 0; }
@@ -282,13 +284,13 @@ html[style*="color-scheme: dark"] .head-row { background: var(--bg); }
   overflow: hidden;
   margin-bottom: 4px;
 }
-.bar > span { display: block; height: 100%; background: var(--accent); width: 0; }
-.bar.downloading > span { background: var(--accent); }
+.bar > span { display: block; height: 100%; background: var(--status-stop); width: 0; }
+.bar.downloading > span { background: var(--status-down); }
 .bar.seeding > span { background: var(--status-seed); }
 .bar.queued > span { background: var(--status-queue); }
 .bar.checking > span { background: var(--status-check); }
-.bar.stopped > span { background: var(--muted-fill); }
-.bar.error > span { background: var(--emphasis); }
+.bar.stopped > span { background: var(--status-stop); }
+.bar.error > span { background: var(--status-error); }
 .pct { color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
 .inspector-progress { display: flex; align-items: center; gap: 10px; margin: 0 0 12px; }
 .inspector-body > .status { margin-bottom: 8px; }
