@@ -531,7 +531,7 @@
   }
   function registerWorker() {
     if (!("serviceWorker" in navigator)) return;
-    navigator.serviceWorker.register(location.origin + "/transmission/web/sw.js?v1.0.24").catch(function () {});
+    navigator.serviceWorker.register(location.origin + "/transmission/web/sw.js?v1.0.25").catch(function () {});
   }
   function probe() {
     state.mode = "probing";
@@ -839,6 +839,64 @@
     var head = '<div class="head-row" role="row"><div class="head-main"><button type="button" class="left" data-act="sort" data-sort="name">Name</button><button type="button" class="left" data-act="sort" data-sort="percent_done">Progress</button></div><button type="button" class="num" data-act="sort" data-sort="total_size">Size</button><button type="button" class="num" data-act="sort" data-sort="downloaded_ever">Downloaded</button><button type="button" class="num" data-act="sort" data-sort="rate_download">Down</button><button type="button" class="num" data-act="sort" data-sort="rate_upload">Up</button><button type="button" class="num" data-act="sort" data-sort="eta">ETA</button><button type="button" class="num" data-act="sort" data-sort="upload_ratio">Ratio</button></div>';
     return head + rows.map(rowHtml).join("");
   }
+  function listIdentity(scroll) {
+    if (!scroll || scroll.querySelector(".status-center, .skeleton-row")) return false;
+    var rows = visibleTorrents();
+    var nodes = scroll.querySelectorAll(".row[data-id]");
+    if (!rows.length || nodes.length !== rows.length) return false;
+    for (var i = 0; i < rows.length; i++) {
+      if (nodes[i].dataset.id !== String(rows[i].id)) return false;
+      if (!!nodes[i].querySelector(".sub.error") !== !!rows[i].error_string) return false;
+    }
+    return true;
+  }
+  function setLiveText(node, value) {
+    if (!node || node.textContent === value) return;
+    node.textContent = value;
+    if (node.hasAttribute("data-full")) node.setAttribute("data-full", value);
+  }
+  function refreshListLive(scroll) {
+    visibleTorrents().forEach(function (torrent) {
+      var row = scroll.querySelector('.row[data-id="' + torrent.id + '"]');
+      if (!row) return;
+      var selected = state.selected.has(torrent.id);
+      row.classList.toggle("selected", selected);
+      row.setAttribute("aria-selected", selected ? "true" : "false");
+      var box = row.querySelector("[data-check]");
+      if (box && box !== document.activeElement) box.checked = selected;
+      setLiveText(row.querySelector(".name"), torrent.name || "");
+      var info = statusInfo(torrent);
+      var chip = row.querySelector("[data-status-chip]");
+      if (chip) {
+        chip.className = "status " + info.kind;
+        if (chip.textContent !== info.label) chip.textContent = info.label;
+      }
+      var err = row.querySelector(".sub.error");
+      if (err) setLiveText(err, torrent.error_string || "");
+      var fraction = shownFraction(torrent);
+      var nums = [
+        Twui.formatBytes(torrent.total_size, state.units),
+        Twui.formatBytes(torrent.downloaded_ever, state.units),
+        Twui.formatSpeed(torrent.rate_download, state.units),
+        Twui.formatSpeed(torrent.rate_upload, state.units),
+        Twui.formatDuration(torrent.eta),
+        Twui.formatRatio(torrent.upload_ratio)
+      ];
+      row.querySelectorAll(".num").forEach(function (node, index) {
+        if (nums[index] != null) setLiveText(node, nums[index]);
+      });
+      row.querySelectorAll(".card-meta b").forEach(function (node, index) {
+        if (nums[index] != null) setLiveText(node, nums[index]);
+      });
+      var bar = row.querySelector("[data-live-progress]");
+      if (bar) {
+        bar.className = barClass(torrent);
+        var fill = bar.firstElementChild;
+        if (fill) fill.style.width = progressWidth(fraction);
+      }
+      setLiveText(row.querySelector("[data-live-percent]"), progressText(fraction));
+    });
+  }
 
   function stat(label, value, live) {
     var liveAttr = live ? ' data-live-stat="' + live + '"' : "";
@@ -1120,6 +1178,42 @@
     document.title = state.title;
     paintLive();
   }
+  var scrollQuiet = { list: 0, inspector: 0, filters: 0, chips: 0 };
+  var scrollTimer = null;
+  function holdScroll(key) {
+    scrollQuiet[key] = Date.now() + 250;
+    if (scrollTimer) return;
+    scrollTimer = setTimeout(flushScrollHold, 270);
+  }
+  function scrollerBusy(key) {
+    return Date.now() < scrollQuiet[key];
+  }
+  function flushScrollHold() {
+    scrollTimer = null;
+    var now = Date.now();
+    var wait = 0;
+    Object.keys(scrollQuiet).forEach(function (key) {
+      if (scrollQuiet[key] > now) wait = Math.max(wait, scrollQuiet[key] - now);
+    });
+    if (wait > 0) {
+      scrollTimer = setTimeout(flushScrollHold, wait + 20);
+      return;
+    }
+    if (state.mode === "live") paintLive();
+  }
+  function scrollerKey(node) {
+    var current = node;
+    while (current && current !== document) {
+      if (current.id === "list-scroll") return "list";
+      if (current.classList) {
+        if (current.classList.contains("inspector-body")) return "inspector";
+        if (current.classList.contains("filters")) return "filters";
+        if (current.classList.contains("chips")) return "chips";
+      }
+      current = current.parentNode;
+    }
+    return "";
+  }
   function paintLive() {
     if (state.mode !== "live" || !document.getElementById("shell")) return;
     var shell = document.getElementById("shell");
@@ -1136,29 +1230,42 @@
     });
     var scroll = document.getElementById("list-scroll");
     var top = scroll ? scroll.scrollTop : 0;
-    if (state.view === "activity") scroll.innerHTML = activityHtml();
-    else if (state.view === "settings") {
-      if (state.rebuildSettings || !scroll.querySelector(".settings-nav")) {
+    var holdList = scrollerBusy("list");
+    if (state.view === "activity") {
+      if (!holdList && scroll) {
+        scroll.innerHTML = activityHtml();
+        scroll.scrollTop = top;
+      }
+    } else if (state.view === "settings") {
+      if (!holdList && scroll && (state.rebuildSettings || !scroll.querySelector(".settings-nav"))) {
         scroll.innerHTML = settingsHtml();
         state.rebuildSettings = false;
+        scroll.scrollTop = top;
       }
-    }
-    else if (!(showInspector() && !Twui.wide.matches)) {
-      scroll.innerHTML = listHtml();
-      scroll.scrollTop = top;
+    } else if (scroll && !(showInspector() && !Twui.wide.matches)) {
+      if (listIdentity(scroll)) refreshListLive(scroll);
+      else if (!holdList) {
+        scroll.innerHTML = listHtml();
+        scroll.scrollTop = top;
+      }
       scroll.setAttribute("aria-busy", state.loaded ? "false" : "true");
     }
     var inspector = document.getElementById("inspector");
     if (showInspector() && state.selected.size > 1) {
-      inspector.innerHTML = summaryHtml();
-      delete inspector.dataset.detailId;
-      delete inspector.dataset.tab;
-      delete inspector.dataset.shape;
+      if (!scrollerBusy("inspector")) {
+        inspector.innerHTML = summaryHtml();
+        delete inspector.dataset.detailId;
+        delete inspector.dataset.tab;
+        delete inspector.dataset.shape;
+      }
     }
     else if (showInspector() && state.detail && state.detail.id === onlyId()) {
       var active = document.activeElement;
       var keep = inspector.contains(active) && active.matches("input, textarea, select");
-      if (keep || sameInspector(inspector, state.detail)) refreshInspectorLive(inspector, state.detail);
+      var sameView = inspector.dataset.detailId === String(state.detail.id) && inspector.dataset.tab === state.tab;
+      if (scrollerBusy("inspector") && sameView) {
+        if (sameInspector(inspector, state.detail)) refreshInspectorLive(inspector, state.detail);
+      } else if (keep || sameInspector(inspector, state.detail)) refreshInspectorLive(inspector, state.detail);
       else {
         var body = inspector.querySelector(".inspector-body");
         var bodyTop = body ? body.scrollTop : 0;
@@ -1193,8 +1300,8 @@
   function paintFilters() {
     var filters = document.querySelector(".filters");
     var chips = document.querySelector(".chips");
-    if (filters) filters.innerHTML = filterButtons("filter-btn");
-    if (chips) chips.innerHTML = filterButtons("chip");
+    if (filters && !scrollerBusy("filters")) filters.innerHTML = filterButtons("filter-btn");
+    if (chips && !scrollerBusy("chips")) chips.innerHTML = filterButtons("chip");
   }
   function paintCounts() {
     document.querySelectorAll("[data-count]").forEach(function (node) {
@@ -2053,6 +2160,21 @@
     setSession(patch);
   }
 
+  document.addEventListener("scroll", function (event) {
+    if (!event.isTrusted) return;
+    var key = scrollerKey(event.target);
+    if (key) holdScroll(key);
+  }, true);
+  document.addEventListener("wheel", function (event) {
+    if (!event.isTrusted) return;
+    var key = scrollerKey(event.target);
+    if (key) holdScroll(key);
+  }, { capture: true, passive: true });
+  document.addEventListener("touchmove", function (event) {
+    if (!event.isTrusted) return;
+    var key = scrollerKey(event.target);
+    if (key) holdScroll(key);
+  }, { capture: true, passive: true });
   document.addEventListener("click", onClick);
   document.addEventListener("change", onChange);
   document.addEventListener("input", function (event) {

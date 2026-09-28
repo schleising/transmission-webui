@@ -86,7 +86,7 @@ The client calls the absolute path `/transmission/rpc`. From a page at `/transmi
 
 ### Interface version
 
-The interface version is `1.0.24`. Settings shows it as “Interface 1.0.24”, and adds the daemon version when `session_get` has returned one. The same string is the cache-busting query on every static file: `app.css?v1.0.24`, `app.js?v1.0.24`, `manifest.webmanifest?v1.0.24`, icon URLs, and `sw.js?v1.0.24`. The HTML links use that query. Raising the version changes every URL, and the service worker drops the previous cache when it activates. The latest published release tag is `v1.0.19`. A cookieless probe that is redirected to a sign-in page is retried with the browser cookies.
+The interface version is `1.0.25`. Settings shows it as “Interface 1.0.25”, and adds the daemon version when `session_get` has returned one. The same string is the cache-busting query on every static file: `app.css?v1.0.25`, `app.js?v1.0.25`, `manifest.webmanifest?v1.0.25`, icon URLs, and `sw.js?v1.0.25`. The HTML links use that query. Raising the version changes every URL, and the service worker drops the previous cache when it activates. The latest published release tag is `v1.0.19`. A cookieless probe that is redirected to a sign-in page is retried with the browser cookies.
 
 `Deployment/webui` also contains an empty `default.json`. Leave that file in the web home. It is there so Transmission does not report a missing `default.json` when it starts.
 
@@ -565,7 +565,7 @@ Wire keys are the JSON-RPC 2.0 snake_case names. Copy them as written.
 
 ## 11. Layout
 
-The page is a full-screen app. `html` and `body` are `height: 100dvh` and `overflow: hidden`. The app grid fills that box. Scrolling happens inside the library list, the inspector body, settings, the filter list, menus, and a long truncation popup. The document itself does not scroll. The library list, the inspector body, and the filter list scroll on the vertical axis only. Horizontal overscroll is left to the browser, so a two-finger swipe can go back or forward. Menus, dialogues, and truncation popups use `overscroll-behavior: contain`.
+The page is a full-screen app. `html` and `body` are `height: 100dvh` and `overflow: hidden`. The app grid fills that box. Scrolling happens inside the library list, the inspector body, settings, the filter list, menus, and a long truncation popup. The document itself does not scroll. A poll updates the library rows in place when the same torrents are still showing. Replacing a scroller’s contents waits until that scroller has finished moving, so a flick is not cut off. The library list, the inspector body, and the filter list scroll on the vertical axis only. Horizontal overscroll is left to the browser, so a two-finger swipe can go back or forward. Menus, dialogues, and truncation popups use `overscroll-behavior: contain`.
 
 Structure is CSS flex and grid. Floats are not used. `position` is not used to place columns, toolbars, or cards. The modal scrim is the exception: it is `position: fixed` and covers the viewport, and its contents are centred with grid (`place-items: center`). Menus and truncation popups are also positioned against the pressed row, inside the app.
 
