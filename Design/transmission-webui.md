@@ -86,7 +86,7 @@ The client calls the absolute path `/transmission/rpc`. From a page at `/transmi
 
 ### Interface version
 
-The interface version is `1.0.25`. Settings shows it as “Interface 1.0.25”, and adds the daemon version when `session_get` has returned one. The same string is the cache-busting query on every static file: `app.css?v1.0.25`, `app.js?v1.0.25`, `manifest.webmanifest?v1.0.25`, icon URLs, and `sw.js?v1.0.25`. The HTML links use that query. Raising the version changes every URL, and the service worker drops the previous cache when it activates. The latest published release tag is `v1.0.19`. A cookieless probe that is redirected to a sign-in page is retried with the browser cookies.
+The interface version is `1.0.26`. Settings shows it as “Interface 1.0.26”, and adds the daemon version when `session_get` has returned one. The same string is the cache-busting query on every static file: `app.css?v1.0.26`, `app.js?v1.0.26`, `manifest.webmanifest?v1.0.26`, icon URLs, and `sw.js?v1.0.26`. The HTML links use that query. Raising the version changes every URL, and the service worker drops the previous cache when it activates. The latest published release tag is `v1.0.19`. A cookieless probe that is redirected to a sign-in page is retried with the browser cookies.
 
 `Deployment/webui` also contains an empty `default.json`. Leave that file in the web home. It is there so Transmission does not report a missing `default.json` when it starts.
 
@@ -142,7 +142,7 @@ The `Host` value that reaches a daemon must be on that daemon’s `rpc_host_whit
 
 Local use is a hostname and port. In the test stack that is port 9091 on the daemon. Remote use is nginx on your domain.
 
-The document head paints the default teal, and the title occupies a fixed-height placeholder, until the colour and title saved for this instance have been applied.
+The document head paints the default teal until the colour saved for this instance has been applied.
 
 ## 4. Signing in
 
@@ -587,7 +587,7 @@ Regions:
 - Every grid and flex child that holds text sets `min-width: 0`. Names, hashes, paths, errors, and tracker URLs use `overflow: hidden`, `text-overflow: ellipsis`, and `white-space: nowrap`, so a long string does not grow the row. Hover on a fine pointer, or a tap on a coarse pointer, opens a popup with the full string. The popup scrolls inside itself when the string is very long. Escape, or a tap outside, closes it. The cell stays the same size.
 - Numeric columns use `font-variant-numeric: tabular-nums` and a reserved width, so `0 kB/s` and a larger speed occupy the same track.
 
-Before the first successful library read, the list shows skeleton rows on the same grid as real rows, and the sidebar speeds and the title use fixed-height placeholders. The busy region sets `aria-busy="true"`. Placeholders are removed when that read arrives. An empty library is shown only after a read that returned no torrents. A value already on screen is not replaced with a placeholder.
+The list stays empty until the first successful library read. An empty library is shown only after a read that returned no torrents. A value already on screen is left in place while a later read is still on the way.
 
 Touch targets that are tapped are at least 44px on the short side. Rows on a wide window can be shorter. Hover-only actions are also available from a visible button or the popup menu. Inputs use a 16px font. The bottom bar respects the safe area.
 
@@ -706,7 +706,7 @@ The service worker is registered at `/transmission/web/sw.js?vX.Y.Z` after the s
 - Colour is not the only status channel. Every state has words.
 - Dialogues trap focus and return it to the control that opened them. Escape closes a dialogue before it clears a selection.
 - Removing files is not the default button in the remove dialogue.
-- Skeleton regions expose `aria-busy` until the first successful read.
+- The library is marked busy until the first successful read.
 - The page sets `user-scalable=no` and `user-select: none` on displayed text, as specified in section 11. Typed fields keep a caret. Touch targets stay at least 44px because the page cannot be zoomed.
 
 ## 16. Acceptance
@@ -727,6 +727,6 @@ The interface is ready when all of the following hold.
 12. Choosing Start leaves the status label unchanged until a later `torrent_get` reports a new `status`. The Start control stays disabled until then.
 13. The browser offers to install the page served from `/transmission/web/`. Two hostnames install as two apps, named from each instance’s title. The service worker’s scope is `/transmission/web/`, so it does not answer `/transmission/rpc`. Static asset URLs end in `?v` plus the interface version, and Settings shows that same version.
 14. Opening the interface locally uses a hostname and port. Opening it remotely uses nginx on your domain, which proxies `/transmission/` to that same daemon, forwards the password challenge, and forwards the session-id header both ways. The test copy is `Testing/webui-test`, served by `Testing/docker-compose.yml` on port 9091. The deployment copy is `Deployment/webui`.
-15. The first library paint uses placeholders the same size as the finished rows, speeds, and title. Long names ellipsize, and a hover or tap shows the full string. Displayed text cannot be selected, and the page cannot be zoomed. Right-click and long-press open the action menu for the selection, or for that row when it is not selected.
+15. Long names ellipsize, and a hover or tap shows the full string. Displayed text cannot be selected, and the page cannot be zoomed. Right-click and long-press open the action menu for the selection, or for that row when it is not selected.
 
 The mockups in this folder are static HTML under `mockups/src/`, rendered to the PNG files beside them. They show the default teal and sample torrents, not a live daemon. They are earlier pictures and are not regenerated to follow later layout changes. The text in this document is the interface that ships.

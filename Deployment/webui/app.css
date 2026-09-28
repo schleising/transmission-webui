@@ -318,16 +318,6 @@ html[style*="color-scheme: dark"] .source-lock { background: var(--bg); }
 .inspector-progress .bar { flex: 1; margin: 0; }
 .inspector-progress .pct { flex: none; }
 
-.skeleton {
-  height: 14px;
-  border-radius: 6px;
-  background: var(--sunken);
-  min-width: 0;
-}
-.row.skeleton-row { pointer-events: none; }
-.row.skeleton-row .skeleton.name { height: 16px; width: 70%; }
-.row.skeleton-row .skeleton.sub { width: 28%; margin-top: 6px; }
-
 .card-meta { display: none; }
 
 .inspector-head, .inspector-actions, .tabs { padding: 12px 16px 0; }

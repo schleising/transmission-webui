@@ -531,7 +531,7 @@
   }
   function registerWorker() {
     if (!("serviceWorker" in navigator)) return;
-    navigator.serviceWorker.register(location.origin + "/transmission/web/sw.js?v1.0.25").catch(function () {});
+    navigator.serviceWorker.register(location.origin + "/transmission/web/sw.js?v1.0.26").catch(function () {});
   }
   function probe() {
     state.mode = "probing";
@@ -825,11 +825,7 @@
   }
   function listHtml() {
     if (state.reconnecting) return '<div class="status-center"><p>Reconnecting…</p></div>';
-    if (!state.loaded) {
-      var bones = "";
-      for (var i = 0; i < 8; i++) bones += '<div class="row skeleton-row"><div><div class="skeleton name"></div><div class="skeleton sub"></div></div><div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div></div>';
-      return '<div class="head-row"><span>Name</span><span class="num">Size</span><span class="num">Downloaded</span><span class="num">Down</span><span class="num">Up</span><span class="num">ETA</span><span class="num">Ratio</span></div>' + bones;
-    }
+    if (!state.loaded) return "";
     var rows = visibleTorrents();
     if (!rows.length) {
       var libraryEmpty = !state.torrents.length && state.filter === "all" && !state.query.trim();
@@ -840,7 +836,7 @@
     return head + rows.map(rowHtml).join("");
   }
   function listIdentity(scroll) {
-    if (!scroll || scroll.querySelector(".status-center, .skeleton-row")) return false;
+    if (!scroll || scroll.querySelector(".status-center")) return false;
     var rows = visibleTorrents();
     var nodes = scroll.querySelectorAll(".row[data-id]");
     if (!rows.length || nodes.length !== rows.length) return false;
@@ -1314,7 +1310,7 @@
   function paintSpeeds() {
     document.querySelectorAll("[data-speed]").forEach(function (node) {
       if (!state.stats) {
-        node.innerHTML = '<span class="skeleton"></span>';
+        node.textContent = "";
         return;
       }
       var value = node.dataset.speed === "down" ? state.stats.download_speed : state.stats.upload_speed;
