@@ -25,24 +25,26 @@
       id: id
     });
     var credentials = (options && options.credentials) || "same-origin";
+    var timeout = options && options.timeout != null ? options.timeout : 15000;
     var retried = false;
 
     function once() {
       var headers = { "Content-Type": "application/json" };
       if (sessionId) headers["X-Transmission-Session-Id"] = sessionId;
       if (authorization && credentials !== "omit") headers.Authorization = authorization;
-      var controller = new AbortController();
-      var timer = setTimeout(function () { controller.abort(); }, 15000);
-      return fetch(location.origin + "/transmission/rpc", {
+      var controller = timeout ? new AbortController() : null;
+      var timer = controller ? setTimeout(function () { controller.abort(); }, timeout) : null;
+      var init = {
         method: "POST",
         headers: headers,
         body: body,
         credentials: credentials,
         redirect: credentials === "omit" ? "manual" : "follow",
-        cache: "no-store",
-        signal: controller.signal
-      }).then(function (response) {
-        clearTimeout(timer);
+        cache: "no-store"
+      };
+      if (controller) init.signal = controller.signal;
+      return fetch(location.origin + "/transmission/rpc", init).then(function (response) {
+        if (timer) clearTimeout(timer);
         if (response.type === "opaqueredirect" || response.status === 301 || response.status === 302 || response.status === 303 || response.status === 307 || response.status === 308) {
           throw new RpcError("Transmission did not accept the password.", { locked: true });
         }
@@ -73,7 +75,7 @@
           return data.result;
         });
       }, function () {
-        clearTimeout(timer);
+        if (timer) clearTimeout(timer);
         throw new RpcError("Transmission did not respond.", { network: true });
       });
     }

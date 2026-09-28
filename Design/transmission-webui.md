@@ -86,7 +86,7 @@ The client calls the absolute path `/transmission/rpc`. From a page at `/transmi
 
 ### Interface version
 
-The interface version is `1.0.18`. Settings shows it as “Interface 1.0.18”, and adds the daemon version when `session_get` has returned one. The same string is the cache-busting query on every static file: `app.css?v1.0.18`, `app.js?v1.0.18`, `manifest.webmanifest?v1.0.18`, icon URLs, and `sw.js?v1.0.18`. The HTML links use that query. Raising the version changes every URL, and the service worker drops the previous cache when it activates. The latest published release tag is `v1.0.16`. A cookieless probe that is redirected to a sign-in page is retried with the browser cookies.
+The interface version is `1.0.19`. Settings shows it as “Interface 1.0.19”, and adds the daemon version when `session_get` has returned one. The same string is the cache-busting query on every static file: `app.css?v1.0.19`, `app.js?v1.0.19`, `manifest.webmanifest?v1.0.19`, icon URLs, and `sw.js?v1.0.19`. The HTML links use that query. Raising the version changes every URL, and the service worker drops the previous cache when it activates. The latest published release tag is `v1.0.16`. A cookieless probe that is redirected to a sign-in page is retried with the browser cookies.
 
 `Deployment/webui` also contains an empty `default.json`. Leave that file in the web home. It is there so Transmission does not report a missing `default.json` when it starts.
 
@@ -284,7 +284,7 @@ Rules for the `409` path:
 - A second `409` on that same call stops. Surface a connection error. Do not loop.
 - Parallel calls that all receive `409` may each retry once. They share the latest stored id.
 
-The client aborts a call that has not finished after 15 seconds so a stuck poll cannot pile up.
+The client aborts a call that has not finished after 15 seconds so a stuck poll cannot pile up. The sign-in `session_get` is not aborted, so a browser password sheet is not dismissed while the password is being typed.
 
 `ids` in a torrent method may be an integer, a list of ids or hashes, or the string `recently_active`. Omitting `ids` means every torrent. A `recently_active` reply lists torrents that changed recently, and its `removed` array is torrent ids deleted since the previous `recently_active` call. A torrent that merely went idle is left out of `torrents` and is not listed in `removed`. Integer ids are not stable across a daemon restart. The interface uses them for the life of the page. After a restart the next poll replaces the list.
 
@@ -683,7 +683,7 @@ The page meets the install criteria for a standalone web app: HTTPS (or localhos
 
 The manifest, icons, and service worker live in `TRANSMISSION_WEB_HOME` and are requested under `/transmission/web/`, each URL carrying `?v` plus the interface version from section 3. The shipped manifest uses the default teal so the app can be installed on the first visit. After the saved colour and title have been applied, the page draws the 192 and 512 icons on a canvas from that palette. The manifest `name` and `short_name` include the title. Another instance installs as a separate app with its own icon and title. The live favicon and `theme-color` follow a successful colour save on this page. Another browser does not take that colour until it is chosen there.
 
-The service worker is registered at `/transmission/web/sw.js?vX.Y.Z`, so its scope is `/transmission/web/`. It caches the app shell, including the version query, so a repeat visit can open the shell. It does not cache `/transmission/rpc`. RPC is outside the worker’s scope, so those requests always go to the daemon that served the page, directly or through nginx. A cached shell with no network shows the unreachable state from section 4, and it does not replay old torrent lists as if they were current. Activating a worker for a new version deletes caches from the previous `?v` query.
+The service worker is registered at `/transmission/web/sw.js?vX.Y.Z` after the session has opened, so its scope is `/transmission/web/`. It does not fetch the shell during install. It stores a shell response when that response succeeds, including the version query, so a repeat visit can open the shell. A sign-in challenge is not stored. It does not cache `/transmission/rpc`. RPC is outside the worker’s scope, so those requests always go to the daemon that served the page, directly or through nginx. A cached shell with no network shows the unreachable state from section 4, and it does not replay old torrent lists as if they were current. Activating a worker for a new version deletes caches from the previous `?v` query.
 
 ## 14. When things fail
 

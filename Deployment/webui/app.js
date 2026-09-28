@@ -520,11 +520,16 @@
     paintRoot();
     startPoll();
     refreshIcons();
+    registerWorker();
+  }
+  function registerWorker() {
+    if (!("serviceWorker" in navigator)) return;
+    navigator.serviceWorker.register(location.origin + "/transmission/web/sw.js?v1.0.19").catch(function () {});
   }
   function probe() {
     state.mode = "probing";
     paintRoot();
-    Twui.rpc("session_get", { fields: UNLOCK_FIELDS }, { credentials: "omit" }).then(function () {
+    Twui.rpc("session_get", { fields: UNLOCK_FIELDS }, { credentials: "omit", timeout: 0 }).then(function () {
       failAuthOff();
     }, function (error) {
       if (error.info && error.info.legacy) return failOld();
@@ -533,7 +538,7 @@
     });
   }
   function probeBrowser() {
-    Twui.rpc("session_get", { fields: UNLOCK_FIELDS }).then(openFromSession, function (error) {
+    Twui.rpc("session_get", { fields: UNLOCK_FIELDS }, { timeout: 0 }).then(openFromSession, function (error) {
       if (error.info && error.info.legacy) return failOld();
       if (error.info && error.info.locked) return showLock();
       failUnreachable();
@@ -2157,6 +2162,5 @@
     closeMobileDetail(true);
   });
 
-  if ("serviceWorker" in navigator) navigator.serviceWorker.register(location.origin + "/transmission/web/sw.js?v1.0.18").catch(function () {});
   probe();
 })();

@@ -1,22 +1,7 @@
-var VERSION = "1.0.18";
+var VERSION = "1.0.19";
 var CACHE = "twui-" + VERSION;
-var SHELL = [
-  "/transmission/web/",
-  "/transmission/web/index.html?v1.0.18",
-  "/transmission/web/app.css?v1.0.18",
-  "/transmission/web/boot.js?v1.0.18",
-  "/transmission/web/format.js?v1.0.18",
-  "/transmission/web/rpc.js?v1.0.18",
-  "/transmission/web/app.js?v1.0.18",
-  "/transmission/web/manifest.webmanifest?v1.0.18",
-  "/transmission/web/icons/favicon.svg?v1.0.18",
-  "/transmission/web/icons/icon-192.png?v1.0.18",
-  "/transmission/web/icons/icon-512.png?v1.0.18",
-  "/transmission/web/icons/icon-maskable-512.png?v1.0.18"
-];
 
-self.addEventListener("install", function (event) {
-  event.waitUntil(caches.open(CACHE).then(function (cache) { return cache.addAll(SHELL); }));
+self.addEventListener("install", function () {
   self.skipWaiting();
 });
 
@@ -35,6 +20,12 @@ function cleanRequest(request) {
   return new Request(url.href, request);
 }
 
+function store(request, response) {
+  if (!response || !response.ok) return;
+  var copy = response.clone();
+  caches.open(CACHE).then(function (cache) { cache.put(request, copy); });
+}
+
 self.addEventListener("fetch", function (event) {
   var url = new URL(event.request.url);
   if (event.request.method !== "GET") return;
@@ -43,8 +34,7 @@ self.addEventListener("fetch", function (event) {
   var documentRequest = event.request.mode === "navigate" || /\/transmission\/web\/(index\.html)?$/.test(url.pathname);
   if (documentRequest) {
     event.respondWith(fetch(request).then(function (response) {
-      var copy = response.clone();
-      caches.open(CACHE).then(function (cache) { cache.put(request, copy); });
+      store(request, response);
       return response;
     }).catch(function () {
       return caches.match(request).then(function (hit) { return hit || caches.match("/transmission/web/"); });
@@ -53,10 +43,7 @@ self.addEventListener("fetch", function (event) {
   }
   event.respondWith(caches.match(request).then(function (hit) {
     return hit || fetch(request).then(function (response) {
-      if (response.ok) {
-        var copy = response.clone();
-        caches.open(CACHE).then(function (cache) { cache.put(request, copy); });
-      }
+      store(request, response);
       return response;
     });
   }));
