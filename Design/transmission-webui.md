@@ -86,7 +86,7 @@ The client calls the absolute path `/transmission/rpc`. From a page at `/transmi
 
 ### Interface version
 
-The interface version is `1.0.26`. Settings shows it as “Interface 1.0.26”, and adds the daemon version when `session_get` has returned one. The same string is the cache-busting query on every static file: `app.css?v1.0.26`, `app.js?v1.0.26`, `manifest.webmanifest?v1.0.26`, icon URLs, and `sw.js?v1.0.26`. The HTML links use that query. Raising the version changes every URL, and the service worker drops the previous cache when it activates. The latest published release tag is `v1.0.19`. A cookieless probe that is redirected to a sign-in page is retried with the browser cookies.
+The interface version is `1.0.28`. Settings shows it as “Interface 1.0.28”, and adds the daemon version when `session_get` has returned one. The same string is the cache-busting query on every static file: `app.css?v1.0.28`, `app.js?v1.0.28`, `manifest.webmanifest?v1.0.28`, icon URLs, and `sw.js?v1.0.28`. The HTML links use that query. Raising the version changes every URL, and the service worker drops the previous cache when it activates. The latest published release tag is `v1.0.19`. A cookieless probe that is redirected to a sign-in page is retried with the browser cookies.
 
 `Deployment/webui` also contains an empty `default.json`. Leave that file in the web home. It is there so Transmission does not report a missing `default.json` when it starts.
 
@@ -573,7 +573,7 @@ Structure is CSS flex and grid. Floats are not used. `position` is not used to p
 |---|---|
 | 1100px and up | A grid of sidebar, list, and inspector. The inspector column is there when one torrent is selected: `240px minmax(0, 1fr) 380px`. Otherwise `240px minmax(0, 1fr)`. |
 | 720px to 1099px | One column in a vertical flex. Filter chips are a horizontal flex row. The inspector is a drawer that fills the viewport, itself a vertical flex. |
-| Under 720px | One column flex. Bottom bar: a grid of three equal tracks, Torrents, Activity, and Settings. The inspector replaces the list. |
+| Under 720px | One column flex. Bottom bar: a grid of three equal tracks, Torrents, Activity, and Settings, with a gap on either side and underneath the group, plus the safe area. The inspector replaces the list. |
 
 Regions:
 
@@ -589,7 +589,7 @@ Regions:
 
 The list stays empty until the first successful library read. An empty library is shown only after a read that returned no torrents. A value already on screen is left in place while a later read is still on the way.
 
-Touch targets that are tapped are at least 44px on the short side. Rows on a wide window can be shorter. Hover-only actions are also available from a visible button or the popup menu. Inputs use a 16px font. The bottom bar respects the safe area.
+Touch targets that are tapped are at least 44px on the short side. Rows on a wide window can be shorter. Hover-only actions are also available from a visible button or the popup menu. Inputs use a 16px font. The bottom bar keeps 6px on either side of the button group and 6px underneath it, and then the safe area.
 
 The viewport is `width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no`, and the root uses `touch-action: manipulation`, so the page does not pinch-zoom or double-tap zoom. Displayed text uses `user-select: none` and `-webkit-user-select: none`. Fields that are typed into keep a caret, so a password or a path can still be entered. This is a deliberate limit: the page cannot be zoomed, and torrent names cannot be selected. Targets stay at least 44px so the phone layout remains usable at the browser’s own scale.
 

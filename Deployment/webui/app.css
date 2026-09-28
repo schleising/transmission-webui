@@ -542,7 +542,7 @@ canvas.pieces { display: block; width: 100%; height: auto; margin: 8px 0 4px; im
 }
 
 @media (max-width: 719px) {
-  .tabbar { order: 2; border-bottom: 0; border-top: 1px solid var(--line); padding-bottom: env(safe-area-inset-bottom); }
+  .tabbar { order: 2; border-bottom: 0; border-top: 1px solid var(--line); padding: 0 6px calc(6px + env(safe-area-inset-bottom)); }
   .head-row { display: none; }
   .row {
     display: flex;
