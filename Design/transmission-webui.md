@@ -86,7 +86,7 @@ The client calls the absolute path `/transmission/rpc`. From a page at `/transmi
 
 ### Interface version
 
-The interface version is `1.0.31`. Settings shows it as “Interface 1.0.31”, and adds the daemon version when `session_get` has returned one. The same string is the cache-busting query on every static file: `app.css?v1.0.31`, `app.js?v1.0.31`, `manifest.webmanifest?v1.0.31`, icon URLs, and `sw.js?v1.0.31`. The HTML links use that query. Raising the version changes every URL, and the service worker drops the previous cache when it activates. The latest published release tag is `v1.0.31`. A cookieless probe that is redirected to a sign-in page is retried with the browser cookies.
+The interface version is `1.0.33`. Settings shows it as “Interface 1.0.33”, and adds the daemon version when `session_get` has returned one. The same string is the cache-busting query on every static file: `app.css?v1.0.33`, `app.js?v1.0.33`, `manifest.webmanifest?v1.0.33`, icon URLs, and `sw.js?v1.0.33`. The HTML links use that query. Raising the version changes every URL, and the service worker drops the previous cache when it activates. The latest published release tag is `v1.0.31`. A cookieless probe that is redirected to a sign-in page is retried with the browser cookies.
 
 `Deployment/webui` also contains an empty `default.json`. Leave that file in the web home. It is there so Transmission does not report a missing `default.json` when it starts.
 
@@ -384,10 +384,10 @@ The page keeps the raw numbers from RPC. Everything drawn on screen is formatted
 | Sizes, speeds, memory | `units` from the unlock `session_get`: `speed_bytes`, `size_bytes`, `memory_bytes`, and `speed_units`, `size_units`, `memory_units`. A rate of 0 is a formatted zero, such as `0 kB/s`. |
 | Before `units` has arrived | Divide by 1000 and use B, kB, MB, GB, TB. |
 | `percent_done` beside a progress bar | Two decimal places, floored, so a fraction just under 1 cannot read as 100%. `100.00%` and a full bar only when the fraction is at least 1. While `status` is 2, the bar uses `recheck_progress` with this same rule. |
-| `recheck_progress` on the inspector’s “Verifying” line, peer progress | A whole-number percentage from the 0–1 fraction. |
+| `recheck_progress` on the inspector’s “Verifying” line, peer progress | A whole-number percentage, floored, so a fraction just under 1 cannot read as 100%. `100%` only when the fraction is at least 1. |
 | `upload_ratio` | Two decimal places. |
-| `eta` | The two largest units: seconds under a minute; minutes under an hour; hours and minutes under a day; days and hours under a week, or days and minutes when no hours remain; weeks and days from a week up. A zero second unit is left off, so a whole day is `1d` and a whole week is `1wk`. Any `eta` below 0 is ∞. |
-| `seconds_active` on Activity | The same two largest units as `eta`, until the time reaches 365 days. Fifty-two weeks is 364 days, so it stays in weeks. From 365 days the largest unit is years: a whole year is `1yr`, leftover weeks are `1yr 2wk`, and leftover days are shown only when no whole week remains, as `1yr 3d`. A missing or negative value is `0 sec`. |
+| `eta` | The two largest units: seconds under a minute; minutes under an hour; hours and minutes under a day; days and hours under a week, or days and minutes when no hours remain; weeks and days from a week up. A space separates every number from its unit. A zero second unit is left off, so a whole day is `1 d` and a whole week is `1 wk`. Any `eta` below 0 is ∞. |
+| `seconds_active` on Activity | The same two largest units as `eta`, until the time reaches 365 days. Fifty-two weeks is 364 days, so it stays in weeks. From 365 days the largest unit is years: a whole year is `1 yr`, leftover weeks are `1 yr 2 wk`, and leftover days are shown only when no whole week remains, as `1 yr 3 d`. A missing or negative value is `0 sec`. |
 | Unix timestamps | The local date and time. |
 | Counts | Grouped digits. |
 

@@ -47,8 +47,9 @@
 
   Twui.formatPercent = function (fraction) {
     var n = Number(fraction);
-    if (!Number.isFinite(n)) n = 0;
-    return Math.round(n * 100) + "%";
+    if (!Number.isFinite(n) || n <= 0) return "0%";
+    if (n >= 1) return "100%";
+    return Math.floor(n * 100) + "%";
   };
 
   Twui.formatRatio = function (value) {
@@ -67,14 +68,14 @@
     var weeks = Math.floor(days / 7);
     if (weeks > 0) {
       days = days % 7;
-      return days ? weeks + "wk " + days + "d" : weeks + "wk";
+      return days ? weeks + " wk " + days + " d" : weeks + " wk";
     }
     if (days > 0) {
       var dayHours = Math.floor((minutes % 1440) / 60);
       var dayMinutes = minutes % 60;
-      if (dayHours > 0) return days + "d " + dayHours + " hr";
-      if (dayMinutes > 0) return days + "d " + dayMinutes + " min";
-      return days + "d";
+      if (dayHours > 0) return days + " d " + dayHours + " hr";
+      if (dayMinutes > 0) return days + " d " + dayMinutes + " min";
+      return days + " d";
     }
     var hours = Math.floor(minutes / 60);
     minutes = minutes % 60;
@@ -93,9 +94,9 @@
       var days = Math.floor((n - years * year) / 86400);
       var weeks = Math.floor(days / 7);
       days = days % 7;
-      if (weeks > 0) return years + "yr " + weeks + "wk";
-      if (days > 0) return years + "yr " + days + "d";
-      return years + "yr";
+      if (weeks > 0) return years + " yr " + weeks + " wk";
+      if (days > 0) return years + " yr " + days + " d";
+      return years + " yr";
     }
     return Twui.formatDuration(n);
   };
