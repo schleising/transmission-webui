@@ -531,7 +531,7 @@
   }
   function registerWorker() {
     if (!("serviceWorker" in navigator)) return;
-    navigator.serviceWorker.register(location.origin + "/transmission/web/sw.js?v1.0.33").catch(function () {});
+    navigator.serviceWorker.register(location.origin + "/transmission/web/sw.js?v1.0.34").catch(function () {});
   }
   function probe() {
     state.mode = "probing";
@@ -824,6 +824,7 @@
     return '<div class="row' + (selected ? " selected" : "") + '" data-id="' + torrent.id + '" role="row" aria-selected="' + selected + '">' + check + '<div class="card-body"><div class="name-line"><div class="name clip" data-full="' + esc(torrent.name) + '">' + esc(torrent.name) + '</div>' + statusChip(torrent) + '</div>' + errorLine + meta + '</div><div class="num">' + esc(Twui.formatBytes(torrent.total_size, state.units)) + '</div><div class="num">' + esc(Twui.formatBytes(torrent.downloaded_ever, state.units)) + '</div><div class="num">' + esc(Twui.formatSpeed(torrent.rate_download, state.units)) + '</div><div class="num">' + esc(Twui.formatSpeed(torrent.rate_upload, state.units)) + '</div><div class="num">' + esc(Twui.formatDuration(torrent.eta)) + '</div><div class="num">' + esc(Twui.formatRatio(torrent.upload_ratio)) + '</div><div class="progress-cell"><span class="' + barClass(torrent) + '" data-live-progress><span style="width:' + progressWidth(fraction) + '"></span></span><span class="pct" data-live-percent>' + esc(progressText(fraction)) + '</span></div></div>';
   }
   function listHtml() {
+    if (state.mode === "probing") return '<div class="status-center"><p>Opening this instance…</p></div>';
     if (state.reconnecting) return '<div class="status-center"><p>Reconnecting…</p></div>';
     if (!state.loaded) return "";
     var rows = visibleTorrents();
@@ -1150,7 +1151,7 @@
 
   function gateHtml() {
     var title = state.title;
-    var body = "<p>Opening this instance…</p>";
+    var body = "";
     if (state.mode === "authOff") body = "<p>Turn on RPC authentication in Transmission, then reload.</p>";
     if (state.mode === "tooOld") body = "<p>This interface needs Transmission 4.1 or newer.</p>";
     if (state.mode === "unreachable") body = '<p>Transmission did not respond.</p><button type="button" class="primary" data-act="retry">Try again</button>';
@@ -1164,7 +1165,7 @@
   function paintRoot() {
     var app = document.getElementById("app");
     app.setAttribute("aria-busy", state.mode === "probing" || (state.mode === "live" && !state.loaded) ? "true" : "false");
-    if (state.mode !== "live") {
+    if (state.mode !== "live" && state.mode !== "probing") {
       app.innerHTML = gateHtml();
       var password = app.querySelector('input[name="password"]');
       if (password && state.lockError) password.focus();
@@ -1211,7 +1212,7 @@
     return "";
   }
   function paintLive() {
-    if (state.mode !== "live" || !document.getElementById("shell")) return;
+    if ((state.mode !== "live" && state.mode !== "probing") || !document.getElementById("shell")) return;
     var shell = document.getElementById("shell");
     shell.classList.toggle("library-view", state.view === "torrents");
     shell.classList.toggle("has-inspector", showInspector() && Twui.wide.matches);

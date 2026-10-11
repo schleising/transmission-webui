@@ -86,7 +86,7 @@ The client calls the absolute path `/transmission/rpc`. From a page at `/transmi
 
 ### Interface version
 
-The interface version is `1.0.33`. Settings shows it as “Interface 1.0.33”, and adds the daemon version when `session_get` has returned one. The same string is the cache-busting query on every static file: `app.css?v1.0.33`, `app.js?v1.0.33`, `manifest.webmanifest?v1.0.33`, icon URLs, and `sw.js?v1.0.33`. The HTML links use that query. Raising the version changes every URL, and the service worker drops the previous cache when it activates. The latest published release tag is `v1.0.31`. A cookieless probe that is redirected to a sign-in page is retried with the browser cookies.
+The interface version is `1.0.34`. Settings shows it as “Interface 1.0.34”, and adds the daemon version when `session_get` has returned one. The same string is the cache-busting query on every static file: `app.css?v1.0.34`, `app.js?v1.0.34`, `manifest.webmanifest?v1.0.34`, icon URLs, and `sw.js?v1.0.34`. The HTML links use that query. Raising the version changes every URL, and the service worker drops the previous cache when it activates. The latest published release tag is `v1.0.31`. A cookieless probe that is redirected to a sign-in page is retried with the browser cookies.
 
 `Deployment/webui` also contains an empty `default.json`. Leave that file in the web home. It is there so Transmission does not report a missing `default.json` when it starts.
 
@@ -152,7 +152,7 @@ The password Transmission expects is the plaintext configured as `rpc-password`,
 
 Because the daemon serves the files, `rpc-authentication-required` applies to `/transmission/web/` as well as `/transmission/rpc`. The browser’s sign-in dialogue is the first gate, locally and through nginx. The document does not load until Transmission accepts the password. RPC calls use the browser’s cached credentials for that origin (`fetch` credentials stay `same-origin`). The page sends an explicit `Authorization` header when the person has just typed the password into the lock screen, so that typed password is the one checked.
 
-On load, before any torrent data is drawn, the client probes `session_get` with `credentials: 'omit'`, so the browser does not attach the password it used to load the page. That is how the page tells a daemon that requires a password from one that does not.
+On load, before any torrent data is drawn, the client probes `session_get` with `credentials: 'omit'`, so the browser does not attach the password it used to load the page. That is how the page tells a daemon that requires a password from one that does not. The Torrents page is already on screen while that probe runs. The list centres “Opening this instance…”. There is no separate opening screen.
 
 | First probe, credentials omitted | What the page does |
 |---|---|
@@ -593,7 +593,7 @@ Touch targets that are tapped are at least 44px on the short side. Rows on a wid
 
 The viewport is `width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no`, and the root uses `touch-action: manipulation`, so the page does not pinch-zoom or double-tap zoom. Displayed text uses `user-select: none` and `-webkit-user-select: none`. Fields that are typed into keep a caret, so a password or a path can still be entered. This is a deliberate limit: the page cannot be zoomed, and torrent names cannot be selected. Targets stay at least 44px so the phone layout remains usable at the browser’s own scale.
 
-Reconnecting, an empty library (“No torrents yet”), and an empty filter (“Nothing in this filter”) are centred in the list, both ways. Reconnecting and an empty library stay until the situation changes. Other status text, such as a duplicate add or an action error, is shown and then cleared after three seconds. Add stays in the toolbar.
+Opening this instance, Reconnecting, an empty library (“No torrents yet”), and an empty filter (“Nothing in this filter”) are centred in the list, both ways. Reconnecting and an empty library stay until the situation changes. Other status text, such as a duplicate add or an action error, is shown and then cleared after three seconds. Add stays in the toolbar.
 
 ## 12. Colour and title
 

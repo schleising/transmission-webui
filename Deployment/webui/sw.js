@@ -1,4 +1,4 @@
-var VERSION = "1.0.33";
+var VERSION = "1.0.34";
 var CACHE = "twui-" + VERSION;
 
 self.addEventListener("install", function () {
